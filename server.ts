@@ -1,6 +1,7 @@
 import express from 'express';
 import path from 'path';
-import { createServer as createViteServer } from 'vite';
+// Vite is only used in dev — dynamic import avoids bundling it in production
+type ViteDevServer = any;
 import { db } from './src/db/index.ts';
 import {
   users,
@@ -30,9 +31,8 @@ import { requireAuth, AuthRequest } from './src/middleware/auth.ts';
 import { PENDING_UID_PREFIX } from './src/db/users-helper.ts';
 import { eq, and, desc, asc, sql, like, or, count } from 'drizzle-orm';
 
-async function startServer() {
+export async function createApp() {
   const app = express();
-  const PORT = process.env.PORT ? parseInt(process.env.PORT) : 3002;
 
   app.use(express.json({ limit: '10mb' }));
 
@@ -1384,23 +1384,33 @@ async function startServer() {
 
   // --- VITE DEV MIDDLEWARE AND CLIENT SERVING FALLBACKS ---
 
-  if (process.env.NODE_ENV !== 'production') {
-    const vite = await createViteServer({
-      server: { middlewareMode: true },
-      appType: 'spa',
-    });
-    app.use(vite.middlewares);
-  } else {
-    const distPath = path.join(process.cwd(), 'dist');
-    app.use(express.static(distPath));
-    app.get('*', (req, res) => {
-      res.sendFile(path.join(distPath, 'index.html'));
-    });
+  // Static file serving only in local dev (Vercel handles this via CDN)
+  if (!process.env.VERCEL) {
+    if (process.env.NODE_ENV !== 'production') {
+      const { createServer: createViteServer } = await import('vite');
+      const vite = await createViteServer({
+        server: { middlewareMode: true },
+        appType: 'spa',
+      });
+      app.use(vite.middlewares);
+    } else {
+      const distPath = path.join(process.cwd(), 'dist');
+      app.use(express.static(distPath));
+      app.get('*', (_req, res) => {
+        res.sendFile(path.join(distPath, 'index.html'));
+      });
+    }
   }
 
-  app.listen(PORT, '0.0.0.0', () => {
-    console.log(`Express and Vite Server running securely on http://localhost:${PORT}`);
-  });
+  return app;
 }
 
-startServer();
+// Local development — start the server directly
+if (!process.env.VERCEL) {
+  const PORT = process.env.PORT ? parseInt(process.env.PORT) : 3002;
+  createApp().then(app => {
+    app.listen(PORT, '0.0.0.0', () => {
+      console.log(`Server running on http://localhost:${PORT}`);
+    });
+  });
+}
