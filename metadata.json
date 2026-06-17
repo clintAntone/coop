@@ -1,0 +1,6 @@
+{
+  "name": "Cooperative Management System",
+  "description": "A comprehensive financial cooperative management system with a double-entry accounting ledger, role-based access control, member management, and reporting.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
