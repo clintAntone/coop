@@ -1,5 +1,7 @@
 node_modules/
 dist/
+server.js
+server.js.map
 .env
 .env.local
 .env.*.local

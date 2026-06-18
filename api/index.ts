@@ -1,4 +1,4 @@
-import { createApp } from '../server.ts';
+import { createApp } from '../server.js';
 
 // Cache the app instance across warm invocations
 let app: Awaited<ReturnType<typeof createApp>> | null = null;
