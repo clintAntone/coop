@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { getSupabaseClient } from '../lib/supabase.ts';
 import { AppSettings } from '../types.ts';
-import { motion } from 'motion/react';
+import { motion, AnimatePresence } from 'motion/react';
 import { KeyRound, AlertTriangle, Coins, Sparkles, LogIn, UserPlus, CheckCircle, Loader, XCircle } from 'lucide-react';
 
 interface AuthScreenProps {
@@ -153,14 +153,42 @@ export default function AuthScreen({ onMockLogin, isLoading, errorMsg, settings 
         className="w-full max-w-md relative bg-white border border-neutral-200/80 rounded-xl shadow-xl shadow-neutral-200/50 overflow-hidden"
       >
         <div className="px-6 pt-8 pb-4 text-center border-b border-neutral-100 bg-neutral-50/50">
-          <div className="inline-flex items-center justify-center w-12 h-12 bg-neutral-900 text-white rounded-lg mb-3 overflow-hidden">
-            {settings.logoUrl
-              ? <img src={settings.logoUrl} alt="Logo" className="w-full h-full object-contain p-1" />
-              : <Coins className="w-6 h-6 shrink-0" />
-            }
-          </div>
-          <h1 className="text-xl font-medium tracking-tight text-neutral-900 font-sans">{settings.appName}</h1>
-          <p className="text-xs text-neutral-500 mt-1">{settings.appSubtitle || 'Enterprise double-entry ledger & subsidiary banking engine'}</p>
+          <AnimatePresence mode="wait">
+            <motion.div
+              key={settings.logoUrl || 'no-logo'}
+              initial={{ opacity: 0, scale: 0.9, filter: 'blur(4px)' }}
+              animate={{ opacity: 1, scale: 1, filter: 'blur(0px)' }}
+              transition={{ duration: 0.3 }}
+              className="inline-flex items-center justify-center w-16 h-16 bg-white text-white rounded-full mb-3 overflow-hidden border border-neutral-100 shadow-sm"
+            >
+              {settings.logoUrl
+                ? <img src={settings.logoUrl} alt="Logo" className="w-full h-full object-contain p-1" />
+                : <Coins className="w-6 h-6 shrink-0" />
+              }
+            </motion.div>
+          </AnimatePresence>
+          <AnimatePresence mode="wait">
+            <motion.h1
+              key={settings.appName || '__loading__'}
+              initial={{ opacity: 0, y: 6, filter: 'blur(4px)' }}
+              animate={{ opacity: 1, y: 0, filter: 'blur(0px)' }}
+              transition={{ duration: 0.3, delay: 0.05 }}
+              className="text-xl font-medium tracking-tight text-neutral-900 font-sans"
+            >
+              {settings.appName || <span className="inline-block w-36 h-5 bg-neutral-200 rounded animate-pulse" />}
+            </motion.h1>
+          </AnimatePresence>
+          <AnimatePresence mode="wait">
+            <motion.p
+              key={settings.appSubtitle || '__loading__'}
+              initial={{ opacity: 0, y: 4, filter: 'blur(4px)' }}
+              animate={{ opacity: 1, y: 0, filter: 'blur(0px)' }}
+              transition={{ duration: 0.3, delay: 0.1 }}
+              className="text-xs text-neutral-500 mt-1"
+            >
+              {settings.appSubtitle || <span className="inline-block w-48 h-3 bg-neutral-100 rounded animate-pulse" />}
+            </motion.p>
+          </AnimatePresence>
         </div>
 
         <div className="p-6 space-y-6">
