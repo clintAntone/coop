@@ -39,7 +39,9 @@ export default function App() {
     };
   };
 
-  const [settings, setSettings] = useState<AppSettings>(parseCachedSettings);
+  const cachedSettings = parseCachedSettings();
+  if (cachedSettings.appName) document.title = cachedSettings.appName;
+  const [settings, setSettings] = useState<AppSettings>(cachedSettings);
 
   useEffect(() => {
     // 0. Fetch app settings — update cache so next load is instant
@@ -60,6 +62,7 @@ export default function App() {
       };
       setSettings(fresh);
       localStorage.setItem(SETTINGS_CACHE_KEY, JSON.stringify(fresh));
+      if (fresh.appName) document.title = fresh.appName;
     }).catch(() => {});
 
     // 1. Recover any active mock or real sessions from localStorage on application start
