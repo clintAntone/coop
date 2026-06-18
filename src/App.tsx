@@ -25,27 +25,28 @@ export default function App() {
     setMountedTabs(prev => new Set([...prev, tab]));
     setActiveTab(tab);
   };
-  const [settings, setSettings] = useState<AppSettings>({
-    appName: 'Coop Management',
-    appSubtitle: 'Enterprise Core',
-    currencySymbol: '$',
-    requireEmployeeId: false,
-    logoUrl: '',
-    motto: '',
-    mission: '',
-    vision: '',
-    address: '',
-    contactEmail: '',
-    contactPhone: '',
-    establishedYear: '',
-  });
+  const SETTINGS_CACHE_KEY = 'coop_settings';
+
+  const parseCachedSettings = (): AppSettings => {
+    try {
+      const raw = localStorage.getItem(SETTINGS_CACHE_KEY);
+      if (raw) return JSON.parse(raw);
+    } catch {}
+    return {
+      appName: '', appSubtitle: '', currencySymbol: '$', requireEmployeeId: false,
+      logoUrl: '', motto: '', mission: '', vision: '',
+      address: '', contactEmail: '', contactPhone: '', establishedYear: '',
+    };
+  };
+
+  const [settings, setSettings] = useState<AppSettings>(parseCachedSettings);
 
   useEffect(() => {
-    // 0. Fetch app settings
+    // 0. Fetch app settings — update cache so next load is instant
     fetch('/api/settings').then(r => r.json()).then(data => {
-      setSettings({
-        appName: data.app_name || 'Coop Management',
-        appSubtitle: data.app_subtitle || 'Enterprise Core',
+      const fresh: AppSettings = {
+        appName: data.app_name || '',
+        appSubtitle: data.app_subtitle || '',
         currencySymbol: data.currency_symbol || '$',
         requireEmployeeId: data.requireEmployeeId === 'true',
         logoUrl: data.logo_url || '',
@@ -56,7 +57,9 @@ export default function App() {
         contactEmail: data.contact_email || '',
         contactPhone: data.contact_phone || '',
         establishedYear: data.established_year || '',
-      });
+      };
+      setSettings(fresh);
+      localStorage.setItem(SETTINGS_CACHE_KEY, JSON.stringify(fresh));
     }).catch(() => {});
 
     // 1. Recover any active mock or real sessions from localStorage on application start
@@ -398,7 +401,7 @@ export default function App() {
               currentUser={currentUser}
               token={authToken}
               settings={settings}
-              onSettingsUpdated={(s) => setSettings(s)}
+              onSettingsUpdated={(s) => { setSettings(s); localStorage.setItem(SETTINGS_CACHE_KEY, JSON.stringify(s)); }}
             />
           </div>
         )}
