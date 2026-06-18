@@ -36,9 +36,13 @@ export async function createApp() {
 
   app.use(express.json({ limit: '10mb' }));
 
-  // 1. Seed Chart of Accounts on startup
-  await seedChartOfAccounts();
-  await seedAppSettings();
+  // 1. Seed Chart of Accounts on startup (non-fatal — DB may not be ready yet)
+  try {
+    await seedChartOfAccounts();
+    await seedAppSettings();
+  } catch (err) {
+    console.error('[startup] Seed failed (will retry on next request):', err);
+  }
 
   // --- API Routes Definition ---
 
