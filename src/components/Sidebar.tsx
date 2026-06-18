@@ -127,18 +127,7 @@ export default function Sidebar({ currentUser, activeTab, setActiveTab, onLogout
           )}
         </nav>
 
-        {/* Dev Role Swap */}
-        <div className="p-4 mx-4 mb-3 border border-neutral-800/80 rounded-lg bg-neutral-950/20">
-          <div className="flex items-center gap-1.5 mb-1.5 text-neutral-400 font-medium text-[10px] uppercase tracking-wide">
-            <Sparkles className="w-3 h-3 text-amber-500 shrink-0" />
-            <span>Dev Role Seat Swap</span>
-          </div>
-          <select value={currentUser.role} onChange={(e) => onRoleSwap(e.target.value)}
-            className="w-full text-[10px] bg-neutral-850 hover:bg-neutral-800 text-neutral-200 border border-neutral-800/80 rounded p-1.5 focus:outline-none transition-all">
-            {rolesList.map(r => <option key={r} value={r}>{r}</option>)}
-          </select>
-          <p className="text-[9px] text-neutral-600 mt-1 pl-0.5">Select any role to test frontend RBAC instantly.</p>
-        </div>
+
 
         {/* Footer */}
         <div className="p-4 border-t border-neutral-800">

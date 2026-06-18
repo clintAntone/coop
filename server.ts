@@ -351,7 +351,7 @@ export async function createApp() {
       }
 
       const targetId = parseInt(req.params.id, 10);
-      const { role } = req.body;
+      const { role, skipEmployeeId } = req.body;
 
       // Resolve the target user to get pendingEmployeeId if set
       const targetUser = await db.select().from(users).where(eq(users.id, targetId)).limit(1);
@@ -359,7 +359,27 @@ export async function createApp() {
         return res.status(404).json({ error: 'User not found.' });
       }
 
-      // Use pendingEmployeeId stored at registration, or fall back to body (legacy)
+      const assignedRole = role || 'Member';
+
+      // --- Path A: Approve without employee ID linkage (owners, external stakeholders) ---
+      if (skipEmployeeId) {
+        const updated = await db.update(users)
+          .set({ isActive: true, role: assignedRole, updatedAt: new Date() })
+          .where(eq(users.id, targetId))
+          .returning();
+
+        if (!updated.length) return res.status(404).json({ error: 'User not found.' });
+
+        await db.insert(auditLogs).values({
+          userId: req.dbUser.id,
+          action: 'APPROVE_USER_NO_EMPLOYEE_LINK',
+          details: `Approved User ID ${targetId} as ${assignedRole} (no employee ID linkage)`,
+        });
+
+        return res.json(updated[0]);
+      }
+
+      // --- Path B: Standard approval with employee ID linkage ---
       const employeeId = (targetUser[0].pendingEmployeeId || req.body.employeeId || '').trim();
 
       if (!employeeId) {
@@ -377,8 +397,6 @@ export async function createApp() {
 
       const emp = rosterEntry[0];
 
-      // Approve and link the user (keep pendingEmployeeId as a permanent roster reference)
-      const assignedRole = role || 'Member';
       const updated = await db.update(users)
         .set({ isActive: true, employeeIdVerified: true, role: assignedRole, updatedAt: new Date() })
         .where(eq(users.id, targetId))
@@ -394,7 +412,6 @@ export async function createApp() {
         .where(eq(validEmployeeIds.id, emp.id));
 
       // Auto-link or create member profile
-      const fullName = [emp.firstName, emp.middleName, emp.lastName].filter(Boolean).join(' ');
       const existingMember = await db.select().from(members)
         .where(eq(members.employeeId, emp.employeeId))
         .limit(1);

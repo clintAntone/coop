@@ -71,6 +71,7 @@ export default function UsersModule({ currentUser, token }: UsersModuleProps) {
   const [linkRole, setLinkRole] = useState('Member');
   const [isLinking, setIsLinking] = useState(false);
   const [linkError, setLinkError] = useState<string | null>(null);
+  const [skipEmpId, setSkipEmpId] = useState(false);
 
   const rolesList = ['System Admin', 'Manager', 'Accounting Officer', 'Cashier', 'Auditor', 'Member'];
 
@@ -172,18 +173,20 @@ export default function UsersModule({ currentUser, token }: UsersModuleProps) {
     setEmpSearch('');
     setLinkRole('Member');
     setLinkError(null);
+    setSkipEmpId(false);
     await fetchUnclaimed();
   };
 
   const handleApproveAndLink = async () => {
-    if (!linkModal || !selectedEmpId) return;
+    if (!linkModal) return;
+    if (!skipEmpId && !selectedEmpId) return;
     setIsLinking(true);
     setLinkError(null);
     try {
       const res = await fetch(`/api/users/${linkModal.user.id}/approve-and-link`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ employeeId: selectedEmpId, role: linkRole }),
+        body: JSON.stringify({ employeeId: selectedEmpId, role: linkRole, skipEmployeeId: skipEmpId }),
       });
       if (!res.ok) { const e = await res.json(); throw new Error(e.error || 'Failed to approve user.'); }
       setLinkModal(null);
@@ -540,7 +543,16 @@ export default function UsersModule({ currentUser, token }: UsersModuleProps) {
             )}
 
             <div className="space-y-3">
-              <div>
+              <label className="flex items-center gap-2.5 cursor-pointer select-none p-2.5 rounded-lg border border-neutral-200 hover:bg-neutral-50 transition-colors">
+                <input type="checkbox" checked={skipEmpId} onChange={e => setSkipEmpId(e.target.checked)}
+                  className="rounded border-neutral-300 text-neutral-900 cursor-pointer" />
+                <div>
+                  <div className="text-xs font-semibold text-neutral-800">Approve without Employee ID</div>
+                  <div className="text-[10px] text-neutral-400">For owners and external stakeholders not in the roster.</div>
+                </div>
+              </label>
+
+              {!skipEmpId && <div>
                 <label className="block text-[10px] font-bold uppercase text-neutral-400 mb-1">Employee ID</label>
                 {unclaimedEmployees.length === 0 ? (
                   <p className="text-xs text-amber-600 bg-amber-50 border border-amber-200 rounded-lg p-2.5">
@@ -593,6 +605,8 @@ export default function UsersModule({ currentUser, token }: UsersModuleProps) {
                 })()}
               </div>
 
+              </div>}
+
               <div>
                 <label className="block text-[10px] font-bold uppercase text-neutral-400 mb-1">Assign Role</label>
                 <select value={linkRole} onChange={e => setLinkRole(e.target.value)}
@@ -607,7 +621,7 @@ export default function UsersModule({ currentUser, token }: UsersModuleProps) {
                 className="flex-1 border border-neutral-200 text-neutral-700 hover:bg-neutral-50 text-xs font-semibold py-2 rounded-lg cursor-pointer transition-colors">
                 Cancel
               </button>
-              <button onClick={handleApproveAndLink} disabled={isLinking || !selectedEmpId}
+              <button onClick={handleApproveAndLink} disabled={isLinking || (!skipEmpId && !selectedEmpId)}
                 className="flex-1 bg-neutral-900 hover:bg-neutral-800 disabled:bg-neutral-300 text-white text-xs font-semibold py-2 rounded-lg cursor-pointer transition-colors flex items-center justify-center gap-2">
                 {isLinking ? <Loader className="w-3.5 h-3.5 animate-spin" /> : <UserCheck2 className="w-3.5 h-3.5" />}
                 {isLinking ? 'Approving...' : 'Approve & Activate'}
