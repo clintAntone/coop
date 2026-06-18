@@ -603,8 +603,6 @@ export default function UsersModule({ currentUser, token }: UsersModuleProps) {
                     </div>
                   );
                 })()}
-              </div>
-
               </div>}
 
               <div>

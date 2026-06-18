@@ -237,50 +237,6 @@ export default function AuthScreen({ onMockLogin, isLoading, errorMsg, settings 
             </div>
           </form>
 
-          <div className="relative flex py-2 items-center">
-            <div className="flex-grow border-t border-neutral-200"></div>
-            <span className="flex-shrink mx-4 text-neutral-400 text-[10px] font-semibold uppercase tracking-wider">or bypass for review</span>
-            <div className="flex-grow border-t border-neutral-200"></div>
-          </div>
-
-          <div className="space-y-4 bg-neutral-50/80 border border-neutral-200/60 p-4 rounded-lg">
-            <div className="flex items-center gap-1.5 text-neutral-700 text-xs font-medium">
-              <Sparkles className="w-3.5 h-3.5 text-amber-500 shrink-0" />
-              <span>Developer Interactive Playground</span>
-            </div>
-            <p className="text-[11px] text-neutral-500 leading-relaxed">
-              Skip cloud authentication and log directly into any of the predefined RBAC roles below:
-            </p>
-            <div className="space-y-3">
-              <div>
-                <label className="block text-[10px] uppercase font-semibold text-neutral-400 mb-1">Target Role Account</label>
-                <select value={selectedMockRole} onChange={e => handleMockRoleChange(e.target.value)}
-                  className="w-full text-xs border border-neutral-200 rounded-md bg-white p-2 text-neutral-800 focus:outline-none focus:ring-1 focus:ring-neutral-400">
-                  <option value="System Admin">System Admin (Full Settings Control)</option>
-                  <option value="Manager">Manager (Member Operations)</option>
-                  <option value="Accounting Officer">Accounting Officer (Manual Adjustments & Ledger)</option>
-                  <option value="Cashier">Cashier (Deposits, Withdrawals, Postings)</option>
-                  <option value="Auditor">Auditor (Read-Only Trial Balance & Logs)</option>
-                  <option value="Member">Member (Alice Cooper - Self-Service Portal)</option>
-                </select>
-              </div>
-              <div className="grid grid-cols-2 gap-2 text-[11px]">
-                <div>
-                  <div className="text-neutral-400 uppercase text-[9px] font-semibold">Mock Name</div>
-                  <div className="text-neutral-700 font-medium truncate">{mockName}</div>
-                </div>
-                <div>
-                  <div className="text-neutral-400 uppercase text-[9px] font-semibold">Mock Account</div>
-                  <div className="text-neutral-700 font-mono truncate">{mockEmail}</div>
-                </div>
-              </div>
-              <button onClick={() => onMockLogin(selectedMockRole, mockEmail, mockName)}
-                className="w-full flex items-center justify-center gap-2 bg-white hover:bg-neutral-100 border border-neutral-300 hover:border-neutral-400 text-neutral-800 text-xs font-medium py-2 px-4 rounded-md shadow-sm transition-all cursor-pointer">
-                <KeyRound className="w-3.5 h-3.5 text-neutral-500" />
-                Initialize Role Session
-              </button>
-            </div>
-          </div>
         </div>
 
         <div className="bg-neutral-50 border-t border-neutral-100 px-6 py-4 flex items-center justify-between text-[10px] text-neutral-400">

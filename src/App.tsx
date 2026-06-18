@@ -311,9 +311,6 @@ export default function App() {
             For compliance, an authorized System Admin must approve your active status.
           </p>
           <div className="mt-6 flex flex-col gap-2">
-            <p className="text-[10px] text-neutral-400">
-              Need immediate clearance? Use the Developer Interactive Playground in the Sign-In panel under a mock Admin to approve yourself.
-            </p>
             <button
               onClick={handleLogout}
               className="mt-2 w-full flex items-center justify-center gap-2 bg-neutral-900 hover:bg-neutral-850 text-white font-medium text-xs py-2 rounded-lg cursor-pointer transition-all"
