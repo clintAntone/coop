@@ -807,7 +807,7 @@ export default function MembersModule({ currentUser, token, settings }: MembersM
                   </button>
                   <button
                     type="submit"
-                    disabled={submitting || (formMode === 'create' && (!selectedUserId || !firstName || !lastName || !employeeId))}
+                    disabled={submitting || (formMode === 'create' && (!selectedUserId || !firstName || !lastName))}
                     className="flex items-center gap-1.5 bg-neutral-900 hover:bg-neutral-800 disabled:bg-neutral-300 text-white text-xs font-semibold py-2 px-4 rounded-md shadow-sm transition-all cursor-pointer"
                   >
                     {submitting ? 'Processing Transaction...' : formMode === 'create' ? 'Activate Profile' : 'Modify Record'}

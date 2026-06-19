@@ -257,7 +257,6 @@ export async function createApp() {
 
       const eligible = activeUsers
         .filter(u =>
-          !u.uid.startsWith('pre-reg:') &&          // exclude unconfirmed stubs
           !memberEmails.has(u.email.toLowerCase()) &&
           !memberUserIds.has(u.id)
         )
@@ -680,13 +679,15 @@ export async function createApp() {
 
       const { employeeId, firstName, lastName, email, phone, department, linkUserEmail } = req.body;
 
-      if (!employeeId || !firstName || !lastName || !email) {
+      if (!firstName || !lastName || !email) {
         return res.status(400).json({ error: 'Validation Error: Required fields are missing.' });
       }
 
       // Check if email or employeeId is duplicated
       const dupCheck = await db.select().from(members).where(
-        or(eq(members.email, email), eq(members.employeeId, employeeId))
+        employeeId
+          ? or(eq(members.email, email), eq(members.employeeId, employeeId))
+          : eq(members.email, email)
       );
       if (dupCheck.length > 0) {
         return res.status(400).json({ error: 'Validation Error: Email or Employee ID already registered.' });
