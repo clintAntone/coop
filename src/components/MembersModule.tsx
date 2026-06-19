@@ -19,6 +19,10 @@ import {
   MapPin,
   RefreshCw,
   ChevronDown,
+  MoreHorizontal,
+  Pencil,
+  UserX,
+  UserCheck,
 } from 'lucide-react';
 
 interface EligibleUser {
@@ -68,6 +72,10 @@ export default function MembersModule({ currentUser, token, settings }: MembersM
   const [drawerDetails, setDrawerDetails] = useState<any | null>(null);
   const [drawerLedger, setDrawerLedger] = useState<LedgerLine[]>([]);
   const [drawerLoading, setDrawerLoading] = useState(false);
+
+  // Row action menu + status confirmation modal
+  const [openMenuId, setOpenMenuId] = useState<number | null>(null);
+  const [confirmModal, setConfirmModal] = useState<{ member: Member; action: 'suspend' | 'activate' } | null>(null);
 
   useEffect(() => {
     fetchMembers();
@@ -194,28 +202,22 @@ export default function MembersModule({ currentUser, token, settings }: MembersM
     }
   };
 
-  const handleToggleStatus = async (member: Member, e: React.MouseEvent) => {
-    e.stopPropagation();
-    if (!confirm(`Are you sure you want to ${member.isActive ? 'deactivate' : 'activate'} ${member.firstName} ${member.lastName}?`)) {
-      return;
-    }
-
+  const handleToggleStatus = async (member: Member) => {
     try {
       const res = await fetch(`/api/members/${member.id}/status`, {
         method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`
-        },
-        body: JSON.stringify({ isActive: !member.isActive })
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ isActive: !member.isActive }),
       });
       if (!res.ok) {
         const err = await res.json();
         throw new Error(err.error || 'Failed to update member status.');
       }
+      setConfirmModal(null);
       fetchMembers();
     } catch (err: any) {
-      alert(err.message);
+      setErrorMessage(err.message);
+      setConfirmModal(null);
     }
   };
 
@@ -318,10 +320,7 @@ export default function MembersModule({ currentUser, token, settings }: MembersM
               <XCircle className="w-8 h-8 text-red-500 shrink-0" />
               <div className="text-xs font-semibold text-neutral-800">Connection Error</div>
               <p className="text-[11px] text-neutral-500">{errorMessage}</p>
-              <button
-                onClick={fetchMembers}
-                className="text-xs text-neutral-800 underline hover:text-black font-semibold"
-              >
+              <button onClick={fetchMembers} className="text-xs text-neutral-800 underline hover:text-black font-semibold">
                 Retry Request
               </button>
             </div>
@@ -332,16 +331,55 @@ export default function MembersModule({ currentUser, token, settings }: MembersM
               </div>
               <h3 className="text-xs font-semibold text-neutral-800">No Members Found</h3>
               <p className="text-[11px] text-neutral-400">
-                {searchTerm ? 'Refine your search constraints.' : 'Introduce the first cooperative member Profile.'}
+                {searchTerm ? 'Refine your search constraints.' : 'Introduce the first cooperative member profile.'}
               </p>
             </div>
+          ) : activeDrawerMember ? (
+            /* Compact list — shown when the detail drawer is open */
+            <ul className="divide-y divide-neutral-100">
+              {filteredMembers.map((member) => {
+                const isSelected = activeDrawerMember?.id === member.id;
+                const initials = `${member.firstName?.[0] ?? ''}${member.lastName?.[0] ?? ''}`.toUpperCase();
+                return (
+                  <li
+                    key={member.id}
+                    onClick={() => handleSelectMember(member)}
+                    className={`relative flex items-center gap-3 px-4 py-3.5 cursor-pointer transition-colors ${
+                      isSelected ? 'bg-neutral-50' : 'hover:bg-neutral-50/60'
+                    }`}
+                  >
+                    {/* Left accent bar for selected */}
+                    {isSelected && (
+                      <span className="absolute left-0 top-2 bottom-2 w-0.5 bg-neutral-900 rounded-full" />
+                    )}
+                    <div className="w-8 h-8 rounded-full bg-neutral-100 border border-neutral-200 flex items-center justify-center text-[11px] font-bold shrink-0 text-neutral-600 uppercase">
+                      {initials || '??'}
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <div className={`text-xs truncate ${isSelected ? 'font-semibold text-neutral-900' : 'font-medium text-neutral-700'}`}>
+                        {member.firstName} {member.lastName}
+                      </div>
+                      <div className="text-[10px] font-mono truncate mt-0.5 text-neutral-400">
+                        {member.employeeId || <span className="italic not-italic text-neutral-300">No ID</span>}
+                      </div>
+                    </div>
+                    <span className={`shrink-0 inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold border ${
+                      member.isActive
+                        ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                        : 'bg-neutral-100 text-neutral-400 border-neutral-200'
+                    }`}>
+                      {member.isActive ? 'Active' : 'Suspended'}
+                    </span>
+                  </li>
+                );
+              })}
+            </ul>
           ) : (
+            /* Full table — shown when no drawer is open */
             <table className="w-full text-left border-collapse table-auto">
               <thead>
                 <tr className="bg-neutral-50 text-neutral-500 text-[10px] uppercase font-semibold border-b border-neutral-150">
-                  <th className="py-3 px-4 w-28">Employee ID</th>
-                  <th className="py-3 px-4">Full Name</th>
-                  <th className="py-3 px-4">Information Contacts</th>
+                  <th className="py-3 px-4">Member</th>
                   <th className="py-3 px-4">Department</th>
                   <th className="py-3 px-4 w-20 text-center">Status</th>
                   {['System Admin', 'Manager', 'Accounting Officer', 'Cashier'].includes(currentUser.role) && (
@@ -350,60 +388,83 @@ export default function MembersModule({ currentUser, token, settings }: MembersM
                 </tr>
               </thead>
               <tbody className="divide-y divide-neutral-150 text-xs">
-                {filteredMembers.map((member) => (
-                  <tr
-                    key={member.id}
-                    onClick={() => handleSelectMember(member)}
-                    className={`hover:bg-neutral-50/50 cursor-pointer transition-colors ${
-                      activeDrawerMember?.id === member.id ? 'bg-neutral-50/80 font-medium' : ''
-                    }`}
-                  >
-                    <td className="py-3 px-4 font-mono text-[10px] text-neutral-500">
-                      {member.employeeId}
-                    </td>
-                    <td className="py-3 px-4 text-neutral-900 font-medium">
-                      {member.firstName} {member.lastName}
-                    </td>
-                    <td className="py-3 px-4 space-y-0.5">
-                      <div className="text-neutral-700 font-sans truncate">{member.email}</div>
-                      {member.phone && <div className="text-[10px] text-neutral-400 font-mono">{member.phone}</div>}
-                    </td>
-                    <td className="py-3 px-4 text-neutral-500">
-                      {member.department || '—'}
-                    </td>
-                    <td className="py-3 px-4 text-center">
-                      <span
-                        className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold ${
+                {filteredMembers.map((member) => {
+                  const initials = `${member.firstName?.[0] ?? ''}${member.lastName?.[0] ?? ''}`.toUpperCase();
+                  return (
+                    <tr
+                      key={member.id}
+                      onClick={() => handleSelectMember(member)}
+                      className="hover:bg-neutral-50/50 cursor-pointer transition-colors"
+                    >
+                      <td className="py-3.5 px-4">
+                        <div className="flex items-center gap-3">
+                          <div className="w-8 h-8 rounded-full bg-neutral-100 border border-neutral-200 flex items-center justify-center text-[11px] font-bold text-neutral-500 shrink-0 uppercase">
+                            {initials || '??'}
+                          </div>
+                          <div>
+                            <div className="font-semibold text-neutral-900">{member.firstName} {member.lastName}</div>
+                            <div className="text-[10px] text-neutral-400 font-mono mt-0.5">{member.employeeId || <span className="italic">No ID</span>}</div>
+                            <div className="text-[10px] text-neutral-400 mt-0.5 truncate max-w-[220px]">{member.email}</div>
+                          </div>
+                        </div>
+                      </td>
+                      <td className="py-3.5 px-4 text-neutral-500 text-xs">
+                        {member.department || '—'}
+                      </td>
+                      <td className="py-3.5 px-4 text-center">
+                        <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold ${
                           member.isActive
                             ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
                             : 'bg-neutral-100 text-neutral-400 border border-neutral-200'
-                        }`}
-                      >
-                        {member.isActive ? 'Active' : 'Suspended'}
-                      </span>
-                    </td>
-                    {['System Admin', 'Manager', 'Accounting Officer', 'Cashier'].includes(currentUser.role) && (
-                      <td className="py-3 px-4 text-right space-x-2" onClick={(e) => e.stopPropagation()}>
-                        <button
-                          onClick={(e) => handleOpenEdit(member, e)}
-                          className="text-[11px] text-neutral-600 hover:text-black font-semibold underline cursor-pointer"
-                        >
-                          Edit
-                        </button>
-                        {['System Admin', 'Manager', 'Accounting Officer'].includes(currentUser.role) && (
-                          <button
-                            onClick={(e) => handleToggleStatus(member, e)}
-                            className={`text-[11px] font-semibold underline cursor-pointer ${
-                              member.isActive ? 'text-neutral-400 hover:text-red-500' : 'text-emerald-600 hover:text-emerald-700'
-                            }`}
-                          >
-                            {member.isActive ? 'Suspend' : 'Activate'}
-                          </button>
-                        )}
+                        }`}>
+                          {member.isActive ? 'Active' : 'Suspended'}
+                        </span>
                       </td>
-                    )}
-                  </tr>
-                ))}
+                      {['System Admin', 'Manager', 'Accounting Officer', 'Cashier'].includes(currentUser.role) && (
+                        <td className="py-3.5 px-4 text-right" onClick={(e) => e.stopPropagation()}>
+                          <div className="relative inline-block">
+                            <button
+                              onClick={() => setOpenMenuId(openMenuId === member.id ? null : member.id)}
+                              className="p-1.5 rounded-lg border border-neutral-200 hover:bg-neutral-100 text-neutral-500 hover:text-neutral-900 transition-colors cursor-pointer"
+                            >
+                              <MoreHorizontal className="w-4 h-4" />
+                            </button>
+                            {openMenuId === member.id && (
+                              <div
+                                className="absolute right-0 top-8 z-20 w-40 bg-white border border-neutral-200 rounded-xl shadow-xl overflow-hidden"
+                                onMouseLeave={() => setOpenMenuId(null)}
+                              >
+                                <button
+                                  onClick={() => { setOpenMenuId(null); handleOpenEdit(member, { stopPropagation: () => {} } as any); }}
+                                  className="w-full flex items-center gap-2.5 px-3.5 py-2.5 text-xs text-neutral-700 hover:bg-neutral-50 transition-colors cursor-pointer"
+                                >
+                                  <Pencil className="w-3.5 h-3.5 text-neutral-400" />
+                                  Edit Profile
+                                </button>
+                                {['System Admin', 'Manager', 'Accounting Officer'].includes(currentUser.role) && (
+                                  <button
+                                    onClick={() => { setOpenMenuId(null); setConfirmModal({ member, action: member.isActive ? 'suspend' : 'activate' }); }}
+                                    title={member.isActive
+                                      ? "Suspends this member's cooperative account. Their membership benefits and ledger access will be frozen until reactivated."
+                                      : "Restores this member's active cooperative membership status."}
+                                    className={`w-full flex items-center gap-2.5 px-3.5 py-2.5 text-xs transition-colors cursor-pointer border-t border-neutral-100 ${
+                                      member.isActive ? 'text-red-600 hover:bg-red-50' : 'text-emerald-700 hover:bg-emerald-50'
+                                    }`}
+                                  >
+                                    {member.isActive
+                                      ? <><UserX className="w-3.5 h-3.5" />Suspend Member</>
+                                      : <><UserCheck className="w-3.5 h-3.5" />Activate Member</>
+                                    }
+                                  </button>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                        </td>
+                      )}
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           )}
@@ -585,6 +646,59 @@ export default function MembersModule({ currentUser, token, settings }: MembersM
           )}
         </AnimatePresence>
       </div>
+
+      {/* Click-outside overlay to close row action menu */}
+      {openMenuId !== null && (
+        <div className="fixed inset-0 z-10" onClick={() => setOpenMenuId(null)} />
+      )}
+
+      {/* Suspend / Activate Confirmation Modal */}
+      {confirmModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-sm p-6 space-y-4">
+            <div className={`w-10 h-10 rounded-full flex items-center justify-center mx-auto mb-1 ${
+              confirmModal.action === 'suspend' ? 'bg-red-50' : 'bg-emerald-50'
+            }`}>
+              {confirmModal.action === 'suspend'
+                ? <UserX className="w-5 h-5 text-red-500" />
+                : <UserCheck className="w-5 h-5 text-emerald-600" />
+              }
+            </div>
+            <div className="text-center">
+              <h2 className="text-sm font-semibold text-neutral-900">
+                {confirmModal.action === 'suspend' ? 'Suspend Member?' : 'Activate Member?'}
+              </h2>
+              <p className="text-xs text-neutral-500 mt-1.5 leading-relaxed">
+                {confirmModal.action === 'suspend'
+                  ? <>This will deactivate <span className="font-semibold text-neutral-800">{confirmModal.member.firstName} {confirmModal.member.lastName}</span>'s membership. They will lose access to cooperative services until reactivated.</>
+                  : <>This will restore <span className="font-semibold text-neutral-800">{confirmModal.member.firstName} {confirmModal.member.lastName}</span>'s active membership status.</>
+                }
+              </p>
+            </div>
+            <div className="flex gap-3 pt-1">
+              <button
+                onClick={() => setConfirmModal(null)}
+                className="flex-1 border border-neutral-200 text-neutral-700 hover:bg-neutral-50 text-xs font-semibold py-2.5 rounded-lg cursor-pointer transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => handleToggleStatus(confirmModal.member)}
+                className={`flex-1 text-white text-xs font-semibold py-2.5 rounded-lg cursor-pointer transition-colors flex items-center justify-center gap-1.5 ${
+                  confirmModal.action === 'suspend'
+                    ? 'bg-red-500 hover:bg-red-600'
+                    : 'bg-emerald-600 hover:bg-emerald-700'
+                }`}
+              >
+                {confirmModal.action === 'suspend'
+                  ? <><UserX className="w-3.5 h-3.5" />Yes, Suspend</>
+                  : <><UserCheck className="w-3.5 h-3.5" />Yes, Activate</>
+                }
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* CREATE/EDIT MEMBER MODAL */}
       <AnimatePresence>

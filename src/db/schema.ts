@@ -167,6 +167,22 @@ export const departments = pgTable('departments', {
   createdAt: timestamp('created_at').defaultNow().notNull(),
 });
 
+// 16. Loan Applications
+export const loanApplications = pgTable('loan_applications', {
+  id: serial('id').primaryKey(),
+  memberId: integer('member_id').references(() => members.id).notNull(),
+  loanProductId: integer('loan_product_id').references(() => loanProducts.id).notNull(),
+  requestedAmountCents: integer('requested_amount_cents').notNull(),
+  termMonths: integer('term_months').notNull(),
+  purpose: text('purpose').notNull(),
+  status: text('status').default('pending').notNull(), // 'pending' | 'approved' | 'rejected' | 'cancelled'
+  reviewNotes: text('review_notes'),
+  reviewedBy: integer('reviewed_by').references(() => users.id),
+  reviewedAt: timestamp('reviewed_at'),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at').defaultNow().notNull(),
+});
+
 // --- Relations Definitions ---
 
 export const usersRelations = relations(users, ({ one, many }) => ({
@@ -227,4 +243,10 @@ export const journalEntryLinesRelations = relations(journalEntryLines, ({ one })
     fields: [journalEntryLines.memberId],
     references: [members.id],
   }),
+}));
+
+export const loanApplicationsRelations = relations(loanApplications, ({ one }) => ({
+  member: one(members, { fields: [loanApplications.memberId], references: [members.id] }),
+  product: one(loanProducts, { fields: [loanApplications.loanProductId], references: [loanProducts.id] }),
+  reviewer: one(users, { fields: [loanApplications.reviewedBy], references: [users.id] }),
 }));

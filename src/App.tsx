@@ -11,6 +11,7 @@ import MemberPortal from './components/MemberPortal.tsx';
 import UsersModule from './components/UsersModule.tsx';
 import ProfileModule from './components/ProfileModule.tsx';
 import SettingsModule from './components/SettingsModule.tsx';
+import LoanApplicationsModule from './components/LoanApplicationsModule.tsx';
 import { AlertTriangle, KeyRound, Loader, ShieldCheck } from 'lucide-react';
 
 export default function App() {
@@ -39,8 +40,31 @@ export default function App() {
     };
   };
 
+  const applyBranding = (s: AppSettings) => {
+    if (s.appName) document.title = s.appName;
+    if (!s.logoUrl) return;
+    // Draw a circular version of the logo onto a canvas and use it as the favicon
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.onload = () => {
+      const size = 64;
+      const canvas = document.createElement('canvas');
+      canvas.width = size;
+      canvas.height = size;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) return;
+      ctx.beginPath();
+      ctx.arc(size / 2, size / 2, size / 2, 0, Math.PI * 2);
+      ctx.clip();
+      ctx.drawImage(img, 0, 0, size, size);
+      const favicon = document.getElementById('app-favicon') as HTMLLinkElement | null;
+      if (favicon) favicon.href = canvas.toDataURL('image/png');
+    };
+    img.src = s.logoUrl;
+  };
+
   const cachedSettings = parseCachedSettings();
-  if (cachedSettings.appName) document.title = cachedSettings.appName;
+  applyBranding(cachedSettings);
   const [settings, setSettings] = useState<AppSettings>(cachedSettings);
 
   useEffect(() => {
@@ -62,7 +86,7 @@ export default function App() {
       };
       setSettings(fresh);
       localStorage.setItem(SETTINGS_CACHE_KEY, JSON.stringify(fresh));
-      if (fresh.appName) document.title = fresh.appName;
+      applyBranding(fresh);
     }).catch(() => {});
 
     // 1. Recover any active mock or real sessions from localStorage on application start
@@ -385,6 +409,11 @@ export default function App() {
             <UsersModule currentUser={currentUser} token={authToken} />
           </div>
         )}
+        {mountedTabs.has('loans') && (
+          <div className={`flex-grow flex flex-col h-full overflow-hidden ${activeTab !== 'loans' ? 'hidden' : ''}`}>
+            <LoanApplicationsModule currentUser={currentUser} token={authToken} settings={settings} />
+          </div>
+        )}
         {mountedTabs.has('profile') && (
           <div className={`flex-grow flex flex-col h-full overflow-hidden ${activeTab !== 'profile' ? 'hidden' : ''}`}>
             <ProfileModule
@@ -404,7 +433,7 @@ export default function App() {
               currentUser={currentUser}
               token={authToken}
               settings={settings}
-              onSettingsUpdated={(s) => { setSettings(s); localStorage.setItem(SETTINGS_CACHE_KEY, JSON.stringify(s)); }}
+              onSettingsUpdated={(s) => { setSettings(s); localStorage.setItem(SETTINGS_CACHE_KEY, JSON.stringify(s)); applyBranding(s); }}
             />
           </div>
         )}

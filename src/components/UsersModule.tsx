@@ -1,5 +1,4 @@
 import React, { useState, useEffect, useRef } from 'react';
-import * as XLSX from 'xlsx';
 import { User } from '../types.ts';
 import { safeReadJson } from '../lib/safe-fetch.ts';
 import {
@@ -11,12 +10,8 @@ import {
   UserCheck2,
   UserX,
   RefreshCw,
-  Upload,
-  Trash2,
-  FileSpreadsheet,
   Link2,
-  ChevronDown,
-  ChevronUp,
+  UserPlus,
 } from 'lucide-react';
 
 interface UsersModuleProps {
@@ -55,13 +50,6 @@ export default function UsersModule({ currentUser, token }: UsersModuleProps) {
   const [roleFilter, setRoleFilter] = useState<string>('all');
   const [updatingUserId, setUpdatingUserId] = useState<number | null>(null);
 
-  // Roster upload state
-  const [rosterOpen, setRosterOpen] = useState(false);
-  const [rosterEntries, setRosterEntries] = useState<RosterEntry[]>([]);
-  const [isUploading, setIsUploading] = useState(false);
-  const [isClearing, setIsClearing] = useState(false);
-  const [rosterMsg, setRosterMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Link & Approve modal state
   const [linkModal, setLinkModal] = useState<{ user: SystemUser } | null>(null);
@@ -73,11 +61,18 @@ export default function UsersModule({ currentUser, token }: UsersModuleProps) {
   const [linkError, setLinkError] = useState<string | null>(null);
   const [skipEmpId, setSkipEmpId] = useState(false);
 
+  // Add Employee modal state (admin direct-create)
+  const [addEmpModal, setAddEmpModal] = useState(false);
+  const [newEmpName, setNewEmpName] = useState('');
+  const [newEmpEmail, setNewEmpEmail] = useState('');
+  const [newEmpRole, setNewEmpRole] = useState('Member');
+  const [isCreating, setIsCreating] = useState(false);
+  const [createError, setCreateError] = useState<string | null>(null);
+
   const rolesList = ['System Admin', 'Manager', 'Accounting Officer', 'Cashier', 'Auditor', 'Member'];
 
   useEffect(() => {
     fetchUsers();
-    fetchRoster();
   }, [token]);
 
   const fetchUsers = async () => {
@@ -94,13 +89,6 @@ export default function UsersModule({ currentUser, token }: UsersModuleProps) {
     }
   };
 
-  const fetchRoster = async () => {
-    try {
-      const res = await fetch('/api/settings/employee-ids', { headers: { Authorization: `Bearer ${token}` } });
-      if (res.ok) setRosterEntries(await safeReadJson(res));
-    } catch {}
-  };
-
   const fetchUnclaimed = async () => {
     try {
       const res = await fetch('/api/settings/unclaimed-employees', { headers: { Authorization: `Bearer ${token}` } });
@@ -108,64 +96,6 @@ export default function UsersModule({ currentUser, token }: UsersModuleProps) {
     } catch {}
   };
 
-  const handleRosterUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    setIsUploading(true);
-    setRosterMsg(null);
-    try {
-      const data = await file.arrayBuffer();
-      const workbook = XLSX.read(data, { type: 'array' });
-      const sheet = workbook.Sheets[workbook.SheetNames[0]];
-      const rows: any[][] = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: '' });
-
-      if (rows.length === 0) throw new Error('Spreadsheet is empty.');
-
-      // Auto-detect header row
-      let startIdx = 0;
-      const firstCell = String(rows[0][0] || '').toLowerCase().replace(/\s/g, '');
-      if (['employeeid', 'employee_id', 'id', 'emp_id', 'empid'].includes(firstCell)) startIdx = 1;
-
-      const employees = rows.slice(startIdx).map(row => ({
-        employeeId: String(row[0] || '').trim(),
-        firstName: String(row[1] || '').trim(),
-        middleName: String(row[2] || '').trim(),
-        lastName: String(row[3] || '').trim(),
-      })).filter(e => e.employeeId);
-
-      if (employees.length === 0) throw new Error('No valid employee records found in the file.');
-
-      const res = await fetch('/api/settings/employee-ids', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ employees }),
-      });
-      if (!res.ok) throw new Error((await safeReadJson(res)).error);
-      const result = await safeReadJson(res);
-      setRosterMsg({ type: 'success', text: `Roster uploaded: ${result.inserted} employee record(s) added.` });
-      await fetchRoster();
-    } catch (err: any) {
-      setRosterMsg({ type: 'error', text: err.message });
-    } finally {
-      setIsUploading(false);
-      if (fileInputRef.current) fileInputRef.current.value = '';
-    }
-  };
-
-  const handleClearRoster = async () => {
-    if (!window.confirm('Clear the entire employee roster? This cannot be undone.')) return;
-    setIsClearing(true);
-    try {
-      const res = await fetch('/api/settings/employee-ids', { method: 'DELETE', headers: { Authorization: `Bearer ${token}` } });
-      if (!res.ok) throw new Error((await safeReadJson(res)).error);
-      setRosterEntries([]);
-      setRosterMsg({ type: 'success', text: 'Employee roster cleared.' });
-    } catch (err: any) {
-      setRosterMsg({ type: 'error', text: err.message });
-    } finally {
-      setIsClearing(false);
-    }
-  };
 
   const openLinkModal = async (user: SystemUser) => {
     setLinkModal({ user });
@@ -191,7 +121,6 @@ export default function UsersModule({ currentUser, token }: UsersModuleProps) {
       if (!res.ok) { const e = await res.json(); throw new Error(e.error || 'Failed to approve user.'); }
       setLinkModal(null);
       await fetchUsers();
-      await fetchRoster();
     } catch (err: any) {
       setLinkError(err.message);
     } finally {
@@ -210,7 +139,6 @@ export default function UsersModule({ currentUser, token }: UsersModuleProps) {
       });
       if (!res.ok) { const e = await res.json(); throw new Error(e.error || 'Failed to approve user.'); }
       await fetchUsers();
-      await fetchRoster();
     } catch (err: any) {
       setErrorMessage(err.message);
     } finally {
@@ -254,6 +182,27 @@ export default function UsersModule({ currentUser, token }: UsersModuleProps) {
     }
   };
 
+  const handleAdminCreate = async () => {
+    if (!newEmpName.trim() || !newEmpEmail.trim()) return;
+    setIsCreating(true);
+    setCreateError(null);
+    try {
+      const res = await fetch('/api/users/admin-create', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ displayName: newEmpName.trim(), email: newEmpEmail.trim(), role: newEmpRole }),
+      });
+      if (!res.ok) { const e = await res.json(); throw new Error(e.error || 'Failed to create user.'); }
+      setAddEmpModal(false);
+      setNewEmpName(''); setNewEmpEmail(''); setNewEmpRole('Member');
+      await fetchUsers();
+    } catch (err: any) {
+      setCreateError(err.message);
+    } finally {
+      setIsCreating(false);
+    }
+  };
+
   const filteredUsers = systemUsers.filter(user => {
     const matchesSearch =
       user.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -268,16 +217,16 @@ export default function UsersModule({ currentUser, token }: UsersModuleProps) {
   const getStatusBadge = (user: SystemUser) => {
     if (!user.isActive) {
       return (
-        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-semibold bg-amber-50 text-amber-700 border border-amber-200">
-          <Clock className="w-3 h-3 shrink-0" />
-          <span>Pending Approval</span>
+        <span className="inline-flex items-center gap-1.5 text-[10px] font-medium text-amber-600">
+          <span className="w-1.5 h-1.5 rounded-full bg-amber-400 shrink-0" />
+          Pending Approval
         </span>
       );
     }
     return (
-      <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
-        <CheckCircle className="w-3 h-3 shrink-0" />
-        <span>Approved & Active</span>
+      <span className="inline-flex items-center gap-1.5 text-[10px] font-medium text-neutral-600">
+        <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0" />
+        Approved & Active
       </span>
     );
   };
@@ -292,98 +241,26 @@ export default function UsersModule({ currentUser, token }: UsersModuleProps) {
           <h1 className="text-xl font-medium tracking-tight text-neutral-900">System User Accounts</h1>
           <p className="text-xs text-neutral-400 mt-1">Review registrations, approve members, and manage staff access privileges.</p>
         </div>
-        <button onClick={fetchUsers} disabled={isLoading}
-          className="flex items-center gap-1.5 border border-neutral-200 bg-white hover:bg-neutral-50 text-neutral-700 text-xs font-semibold py-1.5 px-3 rounded-lg shadow-sm cursor-pointer disabled:opacity-50">
-          <RefreshCw className={`w-3.5 h-3.5 ${isLoading ? 'animate-spin' : ''}`} />
-          <span>Refresh</span>
-        </button>
+        <div className="flex items-center gap-2">
+          {isAdmin && (
+            <button onClick={() => { setAddEmpModal(true); setCreateError(null); }}
+              className="flex items-center gap-1.5 bg-neutral-900 hover:bg-neutral-800 text-white text-xs font-semibold py-1.5 px-3 rounded-lg shadow-sm cursor-pointer">
+              <UserPlus className="w-3.5 h-3.5" />
+              <span>Add Employee</span>
+            </button>
+          )}
+          <button onClick={fetchUsers} disabled={isLoading}
+            className="flex items-center gap-1.5 border border-neutral-200 bg-white hover:bg-neutral-50 text-neutral-700 text-xs font-semibold py-1.5 px-3 rounded-lg shadow-sm cursor-pointer disabled:opacity-50">
+            <RefreshCw className={`w-3.5 h-3.5 ${isLoading ? 'animate-spin' : ''}`} />
+            <span>Refresh</span>
+          </button>
+        </div>
       </div>
 
       {errorMessage && (
         <div className="p-3 bg-red-50 border border-red-200 text-red-600 text-xs rounded-lg flex items-start gap-2">
           <XCircle className="w-4 h-4 mt-0.5 shrink-0" />
           <span>{errorMessage}</span>
-        </div>
-      )}
-
-      {/* Employee Roster Upload (Admin only) */}
-      {isAdmin && (
-        <div className="bg-white border border-neutral-200 rounded-xl shadow-sm overflow-hidden">
-          <button
-            onClick={() => setRosterOpen(o => !o)}
-            className="w-full flex items-center justify-between px-5 py-3.5 text-left hover:bg-neutral-50 transition-colors cursor-pointer"
-          >
-            <div className="flex items-center gap-2.5">
-              <FileSpreadsheet className="w-4 h-4 text-neutral-500 shrink-0" />
-              <span className="text-sm font-semibold text-neutral-800">Employee Roster</span>
-              <span className="text-[10px] bg-neutral-100 text-neutral-500 px-2 py-0.5 rounded-full font-semibold">
-                {rosterEntries.length} records · {rosterEntries.filter(e => e.isClaimed).length} claimed
-              </span>
-            </div>
-            {rosterOpen ? <ChevronUp className="w-4 h-4 text-neutral-400" /> : <ChevronDown className="w-4 h-4 text-neutral-400" />}
-          </button>
-
-          {rosterOpen && (
-            <div className="border-t border-neutral-100 px-5 py-4 space-y-4">
-              <div className="flex items-start gap-2.5 bg-neutral-50 border border-neutral-200 rounded-lg p-3">
-                <FileSpreadsheet className="w-3.5 h-3.5 text-neutral-400 mt-0.5 shrink-0" />
-                <div>
-                  <p className="text-[11px] font-semibold text-neutral-600 mb-0.5">Expected Excel format (.xlsx)</p>
-                  <p className="text-[11px] font-mono text-neutral-500">Column A: EmployeeID &nbsp;·&nbsp; B: FirstName &nbsp;·&nbsp; C: MiddleName &nbsp;·&nbsp; D: LastName</p>
-                  <p className="text-[10px] text-neutral-400 mt-1">Header row is auto-detected and skipped. Middle name may be left blank.</p>
-                </div>
-              </div>
-
-              <div className="flex items-center gap-3">
-                <input ref={fileInputRef} type="file" accept=".xlsx,.xls" onChange={handleRosterUpload} className="hidden" />
-                <button onClick={() => fileInputRef.current?.click()} disabled={isUploading}
-                  className="flex items-center gap-2 bg-neutral-900 hover:bg-neutral-800 text-white text-xs font-semibold py-2 px-4 rounded-lg cursor-pointer disabled:opacity-50 transition-colors">
-                  {isUploading ? <Loader className="w-3.5 h-3.5 animate-spin" /> : <Upload className="w-3.5 h-3.5" />}
-                  {isUploading ? 'Uploading...' : 'Upload Roster (.xlsx)'}
-                </button>
-                {rosterEntries.length > 0 && (
-                  <button onClick={handleClearRoster} disabled={isClearing}
-                    className="flex items-center gap-2 border border-red-200 hover:bg-red-50 text-red-600 text-xs font-semibold py-2 px-4 rounded-lg cursor-pointer disabled:opacity-50 transition-colors">
-                    {isClearing ? <Loader className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />}
-                    Clear Roster
-                  </button>
-                )}
-              </div>
-
-              {rosterMsg && (
-                <p className={`text-xs font-medium ${rosterMsg.type === 'success' ? 'text-emerald-600' : 'text-red-500'}`}>{rosterMsg.text}</p>
-              )}
-
-              {rosterEntries.length > 0 && (
-                <div className="max-h-52 overflow-y-auto border border-neutral-100 rounded-lg">
-                  <table className="w-full text-xs">
-                    <thead className="bg-neutral-50 text-neutral-400 uppercase text-[10px] sticky top-0">
-                      <tr>
-                        <th className="py-2 px-3 text-left font-semibold">Employee ID</th>
-                        <th className="py-2 px-3 text-left font-semibold">Full Name</th>
-                        <th className="py-2 px-3 text-left font-semibold">Status</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-neutral-100">
-                      {rosterEntries.map(e => (
-                        <tr key={e.id}>
-                          <td className="py-2 px-3 font-mono">{e.employeeId}</td>
-                          <td className="py-2 px-3 text-neutral-700">
-                            {[e.firstName, e.middleName, e.lastName].filter(Boolean).join(' ') || '—'}
-                          </td>
-                          <td className="py-2 px-3">
-                            <span className={`px-1.5 py-0.5 rounded text-[10px] font-semibold ${e.isClaimed ? 'bg-emerald-50 text-emerald-700' : 'bg-neutral-100 text-neutral-500'}`}>
-                              {e.isClaimed ? 'Claimed' : 'Available'}
-                            </span>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-            </div>
-          )}
         </div>
       )}
 
@@ -434,6 +311,7 @@ export default function UsersModule({ currentUser, token }: UsersModuleProps) {
               <thead>
                 <tr className="bg-neutral-50 border-b border-neutral-200 text-[10px] uppercase font-bold text-neutral-400">
                   <th className="py-3 px-6">User</th>
+                  <th className="py-3 px-4">Employee ID</th>
                   <th className="py-3 px-6">Role</th>
                   <th className="py-3 px-6">Status</th>
                   <th className="py-3 px-6">Joined</th>
@@ -454,20 +332,25 @@ export default function UsersModule({ currentUser, token }: UsersModuleProps) {
                             {user.displayName ? user.displayName.slice(0, 2) : 'US'}
                           </div>
                           <div>
-                            <div className="font-semibold text-neutral-850 flex items-center gap-1.5 flex-wrap">
+                            <div className="font-semibold text-neutral-850 flex items-center gap-1.5">
                               <span>{user.displayName || 'Unidentified Profile'}</span>
                               {isMe && (
                                 <span className="bg-neutral-900 text-white text-[9px] px-1.5 py-0.5 rounded font-bold uppercase tracking-wide">YOU</span>
-                              )}
-                              {user.pendingEmployeeId && (
-                                <span className="bg-blue-50 text-blue-700 border border-blue-200 text-[9px] px-1.5 py-0.5 rounded font-mono font-semibold">
-                                  {user.pendingEmployeeId}
-                                </span>
                               )}
                             </div>
                             <div className="text-[10px] text-neutral-400 font-mono mt-0.5">{user.email}</div>
                           </div>
                         </div>
+                      </td>
+
+                      <td className="py-4 px-4">
+                        {user.pendingEmployeeId ? (
+                          <span className="text-[10px] text-neutral-500 font-mono whitespace-nowrap">
+                            {user.pendingEmployeeId}
+                          </span>
+                        ) : (
+                          <span className="text-[10px] text-neutral-300 italic">—</span>
+                        )}
                       </td>
 
                       <td className="py-4 px-6">
@@ -477,7 +360,7 @@ export default function UsersModule({ currentUser, token }: UsersModuleProps) {
                             {rolesList.map(r => <option key={r} value={r}>{r}</option>)}
                           </select>
                         ) : (
-                          <span className="font-semibold text-neutral-700 bg-neutral-100 border border-neutral-200 px-2 py-0.5 rounded text-[10px]">{user.role}</span>
+                          <span className="inline-flex items-center font-semibold text-neutral-700 bg-neutral-100 border border-neutral-200 px-2 py-1 rounded text-xs h-[30px]">{user.role}</span>
                         )}
                       </td>
 
@@ -511,7 +394,9 @@ export default function UsersModule({ currentUser, token }: UsersModuleProps) {
                             )}
                           </div>
                         ) : (
-                          <button onClick={() => handleUpdateStatus(user.id, user.isActive)}
+                          <button
+                            onClick={() => handleUpdateStatus(user.id, user.isActive)}
+                            title="Suspends this user's login access. They will be blocked from signing into the system until reactivated."
                             className="flex items-center gap-1 border border-neutral-200 text-neutral-600 hover:bg-red-50 hover:text-red-600 hover:border-red-200 text-[11px] font-semibold py-1 px-3 rounded-md transition-colors cursor-pointer">
                             <UserX className="w-3.5 h-3.5" />
                             <span>Suspend</span>
@@ -523,6 +408,67 @@ export default function UsersModule({ currentUser, token }: UsersModuleProps) {
                 })}
               </tbody>
             </table>
+          </div>
+        </div>
+      )}
+
+      {/* Add Employee Modal */}
+      {addEmpModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4" onClick={() => setAddEmpModal(false)}>
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-md p-6 space-y-4" onClick={e => e.stopPropagation()}>
+            <div>
+              <h2 className="text-base font-semibold text-neutral-900">Add Employee Account</h2>
+              <p className="text-xs text-neutral-500 mt-1">Manually create an active account for owners or staff not in the HR roster.</p>
+            </div>
+
+            {createError && (
+              <div className="p-2.5 bg-red-50 border border-red-200 text-red-600 text-xs rounded-lg">{createError}</div>
+            )}
+
+            <div className="space-y-3">
+              <div>
+                <label className="block text-[10px] font-bold uppercase text-neutral-400 mb-1">Full Name</label>
+                <input
+                  type="text"
+                  placeholder="e.g. Juan Dela Cruz"
+                  value={newEmpName}
+                  onChange={e => setNewEmpName(e.target.value)}
+                  className="w-full text-xs border border-neutral-200 bg-white rounded-lg p-2.5 focus:outline-none focus:ring-1 focus:ring-neutral-900 placeholder:text-neutral-400"
+                />
+              </div>
+              <div>
+                <label className="block text-[10px] font-bold uppercase text-neutral-400 mb-1">Email Address</label>
+                <input
+                  type="email"
+                  placeholder="e.g. owner@coop.local"
+                  value={newEmpEmail}
+                  onChange={e => setNewEmpEmail(e.target.value)}
+                  className="w-full text-xs border border-neutral-200 bg-white rounded-lg p-2.5 focus:outline-none focus:ring-1 focus:ring-neutral-900 placeholder:text-neutral-400"
+                />
+              </div>
+              <div>
+                <label className="block text-[10px] font-bold uppercase text-neutral-400 mb-1">Role</label>
+                <select value={newEmpRole} onChange={e => setNewEmpRole(e.target.value)}
+                  className="w-full text-xs border border-neutral-200 bg-white rounded-lg p-2.5 focus:outline-none focus:ring-1 focus:ring-neutral-900">
+                  {rolesList.map(r => <option key={r} value={r}>{r}</option>)}
+                </select>
+              </div>
+              <div className="p-2.5 bg-blue-50 border border-blue-200 text-blue-800 text-[11px] rounded-lg leading-relaxed">
+                The account will be created as <span className="font-semibold">Approved & Active</span> immediately. The person can log in later using this email.
+              </div>
+            </div>
+
+            <div className="flex gap-3 pt-1">
+              <button onClick={() => setAddEmpModal(false)}
+                className="flex-1 border border-neutral-200 text-neutral-700 hover:bg-neutral-50 text-xs font-semibold py-2 rounded-lg cursor-pointer transition-colors">
+                Cancel
+              </button>
+              <button onClick={handleAdminCreate} disabled={isCreating || !newEmpName.trim() || !newEmpEmail.trim()}
+                className="flex-1 bg-neutral-900 hover:bg-neutral-800 disabled:bg-neutral-300 text-white text-xs font-semibold py-2 rounded-lg cursor-pointer transition-colors flex items-center justify-center gap-2">
+                {isCreating ? <Loader className="w-3.5 h-3.5 animate-spin" /> : <UserPlus className="w-3.5 h-3.5" />}
+                {isCreating ? 'Creating...' : 'Create Account'}
+              </button>
+            </div>
           </div>
         </div>
       )}
@@ -556,7 +502,7 @@ export default function UsersModule({ currentUser, token }: UsersModuleProps) {
                 <label className="block text-[10px] font-bold uppercase text-neutral-400 mb-1">Employee ID</label>
                 {unclaimedEmployees.length === 0 ? (
                   <p className="text-xs text-amber-600 bg-amber-50 border border-amber-200 rounded-lg p-2.5">
-                    No unclaimed employee records found. Upload a roster first.
+                    No unclaimed employee records found in HR roster.
                   </p>
                 ) : (() => {
                   const filtered = unclaimedEmployees.filter(e => {

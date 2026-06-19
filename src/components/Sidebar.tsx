@@ -16,6 +16,7 @@ import {
   Calendar,
   Target,
   Eye,
+  HandCoins,
 } from 'lucide-react';
 
 interface SidebarProps {
@@ -91,6 +92,13 @@ export default function Sidebar({ currentUser, activeTab, setActiveTab, onLogout
             <button onClick={() => setActiveTab('transactions')}
               className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-xs font-medium tracking-wide transition-all cursor-pointer ${activeTab === 'transactions' ? 'bg-white text-neutral-900 shadow font-semibold' : 'text-neutral-400 hover:text-neutral-100 hover:bg-neutral-850'}`}>
               <DollarSign className="w-4 h-4 shrink-0" /><span>Posting Ledger</span>
+            </button>
+          )}
+
+          {currentUser.role !== 'Member' && (
+            <button onClick={() => setActiveTab('loans')}
+              className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-xs font-medium tracking-wide transition-all cursor-pointer ${activeTab === 'loans' ? 'bg-white text-neutral-900 shadow font-semibold' : 'text-neutral-400 hover:text-neutral-100 hover:bg-neutral-850'}`}>
+              <HandCoins className="w-4 h-4 shrink-0" /><span>Loan Applications</span>
             </button>
           )}
 

@@ -15,7 +15,10 @@ import {
   Calendar,
   Layers,
   Sparkles,
-  Info
+  Info,
+  CheckCircle,
+  PlusCircle,
+  Ban,
 } from 'lucide-react';
 
 interface MemberPortalProps {
@@ -29,6 +32,18 @@ export default function MemberPortal({ currentUser, token, settings }: MemberPor
   const [ledgerLines, setLedgerLines] = useState<LedgerLine[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+  // Loan application state
+  const [loanProducts2, setLoanProducts2] = useState<any[]>([]);
+  const [myLoanApps, setMyLoanApps] = useState<any[]>([]);
+  const [showLoanForm, setShowLoanForm] = useState(false);
+  const [loanProductId, setLoanProductId] = useState('');
+  const [loanAmount, setLoanAmount] = useState('');
+  const [loanTerm, setLoanTerm] = useState('');
+  const [loanPurpose, setLoanPurpose] = useState('');
+  const [loanSubmitting, setLoanSubmitting] = useState(false);
+  const [loanError, setLoanError] = useState<string | null>(null);
+  const [loanSuccess, setLoanSuccess] = useState(false);
 
   useEffect(() => {
     fetchMemberPortalData();
@@ -64,6 +79,17 @@ export default function MemberPortal({ currentUser, token, settings }: MemberPor
 
       const ledger = await safeReadJson(resLedger);
       setLedgerLines(ledger);
+
+      // 3. Fetch active loan products
+      const resProducts = await fetch('/api/terms/loan-products', { headers: { Authorization: `Bearer ${token}` } });
+      if (resProducts.ok) {
+        const products = await resProducts.json();
+        setLoanProducts2(products.filter((p: any) => p.isActive));
+      }
+
+      // 4. Fetch member's loan applications
+      const resApps = await fetch('/api/loan-applications/my', { headers: { Authorization: `Bearer ${token}` } });
+      if (resApps.ok) setMyLoanApps(await resApps.json());
     } catch (err: any) {
       console.error(err);
       setErrorMessage(err.message);
@@ -74,6 +100,45 @@ export default function MemberPortal({ currentUser, token, settings }: MemberPor
 
   const handlePrint = () => {
     window.print();
+  };
+
+  const handleLoanSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoanError(null);
+    const selectedProduct = loanProducts2.find(p => p.id === parseInt(loanProductId));
+    if (!selectedProduct) { setLoanError('Please select a loan product.'); return; }
+    const amountCents = Math.round(parseFloat(loanAmount) * 100);
+    if (isNaN(amountCents) || amountCents <= 0) { setLoanError('Enter a valid amount.'); return; }
+    const term = parseInt(loanTerm);
+    if (isNaN(term) || term <= 0) { setLoanError('Enter a valid term.'); return; }
+    if (!loanPurpose.trim()) { setLoanError('Please describe the purpose.'); return; }
+    setLoanSubmitting(true);
+    try {
+      const res = await fetch('/api/loan-applications', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ loanProductId: parseInt(loanProductId), requestedAmountCents: amountCents, termMonths: term, purpose: loanPurpose }),
+      });
+      if (!res.ok) { const e = await res.json(); throw new Error(e.error); }
+      setLoanSuccess(true);
+      setShowLoanForm(false);
+      setLoanAmount(''); setLoanTerm(''); setLoanPurpose(''); setLoanProductId('');
+      // Re-fetch applications
+      const resApps = await fetch('/api/loan-applications/my', { headers: { Authorization: `Bearer ${token}` } });
+      if (resApps.ok) setMyLoanApps(await resApps.json());
+    } catch (err: any) {
+      setLoanError(err.message);
+    } finally {
+      setLoanSubmitting(false);
+    }
+  };
+
+  const handleCancelApp = async (id: number) => {
+    try {
+      await fetch(`/api/loan-applications/${id}/cancel`, { method: 'PUT', headers: { Authorization: `Bearer ${token}` } });
+      const resApps = await fetch('/api/loan-applications/my', { headers: { Authorization: `Bearer ${token}` } });
+      if (resApps.ok) setMyLoanApps(await resApps.json());
+    } catch {}
   };
 
   if (isLoading) {
@@ -274,6 +339,150 @@ export default function MemberPortal({ currentUser, token, settings }: MemberPor
                 })}
               </tbody>
             </table>
+          )}
+        </div>
+
+        {/* Loan Applications Section */}
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <h2 className="text-sm font-semibold text-neutral-900">Loan Applications</h2>
+            {loanProducts2.length > 0 && !myLoanApps.some(a => a.status === 'pending') && (
+              <button
+                onClick={() => { setShowLoanForm(true); setLoanError(null); setLoanSuccess(false); }}
+                className="flex items-center gap-1.5 bg-neutral-900 hover:bg-neutral-800 text-white text-xs font-semibold py-1.5 px-3 rounded-lg cursor-pointer"
+              >
+                <PlusCircle className="w-3.5 h-3.5" />
+                Apply for Loan
+              </button>
+            )}
+          </div>
+
+          {loanSuccess && (
+            <div className="p-3 bg-emerald-50 border border-emerald-200 text-emerald-700 text-xs rounded-lg flex items-center gap-2">
+              <CheckCircle className="w-4 h-4 shrink-0" />
+              Your loan application has been submitted and is pending review.
+            </div>
+          )}
+
+          {loanProducts2.length === 0 ? (
+            <div className="bg-neutral-50 border border-neutral-200 rounded-xl p-6 text-center">
+              <FileText className="w-6 h-6 text-neutral-300 mx-auto mb-2" />
+              <p className="text-xs font-semibold text-neutral-600">Loan products not yet available</p>
+              <p className="text-[11px] text-neutral-400 mt-1">The cooperative has not configured any loan products yet. Please check back later or contact your manager.</p>
+            </div>
+          ) : showLoanForm ? (
+            <div className="bg-white border border-neutral-200 rounded-xl p-5 shadow-sm space-y-4">
+              <h3 className="text-xs font-semibold text-neutral-800">New Loan Application</h3>
+              {loanError && <div className="p-2.5 bg-red-50 border border-red-200 text-red-600 text-xs rounded-lg">{loanError}</div>}
+              <form onSubmit={handleLoanSubmit} className="space-y-3">
+                <div>
+                  <label className="block text-[10px] font-bold uppercase text-neutral-400 mb-1">Loan Product</label>
+                  <select value={loanProductId} onChange={e => setLoanProductId(e.target.value)} required
+                    className="w-full text-xs border border-neutral-200 bg-white rounded-lg p-2.5 focus:outline-none focus:ring-1 focus:ring-neutral-900">
+                    <option value="">— Select a loan type —</option>
+                    {loanProducts2.map(p => (
+                      <option key={p.id} value={p.id}>
+                        {p.name} — {p.interestRateBps / 100}%/mo, max {settings.currencySymbol}{(p.maxAmountCents / 100).toLocaleString()}
+                      </option>
+                    ))}
+                  </select>
+                  {loanProductId && (() => {
+                    const p = loanProducts2.find(p => p.id === parseInt(loanProductId));
+                    if (!p) return null;
+                    return (
+                      <p className="text-[10px] text-neutral-400 mt-1 pl-0.5">
+                        Amount: {settings.currencySymbol}{(p.minAmountCents/100).toLocaleString()} – {settings.currencySymbol}{(p.maxAmountCents/100).toLocaleString()} · Max term: {p.maxTermMonths} months
+                      </p>
+                    );
+                  })()}
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-[10px] font-bold uppercase text-neutral-400 mb-1">Amount ({settings.currencySymbol})</label>
+                    <input type="number" value={loanAmount} onChange={e => setLoanAmount(e.target.value)} required min="1" step="0.01"
+                      className="w-full text-xs border border-neutral-200 bg-white rounded-lg p-2.5 focus:outline-none focus:ring-1 focus:ring-neutral-900 font-mono"
+                      placeholder="e.g. 5000.00" />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-bold uppercase text-neutral-400 mb-1">Term (months)</label>
+                    <input type="number" value={loanTerm} onChange={e => setLoanTerm(e.target.value)} required min="1"
+                      className="w-full text-xs border border-neutral-200 bg-white rounded-lg p-2.5 focus:outline-none focus:ring-1 focus:ring-neutral-900 font-mono"
+                      placeholder="e.g. 12" />
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-[10px] font-bold uppercase text-neutral-400 mb-1">Purpose</label>
+                  <textarea value={loanPurpose} onChange={e => setLoanPurpose(e.target.value)} required rows={2}
+                    className="w-full text-xs border border-neutral-200 bg-white rounded-lg p-2.5 focus:outline-none focus:ring-1 focus:ring-neutral-900 placeholder:text-neutral-400 resize-none"
+                    placeholder="Briefly describe what this loan will be used for..." />
+                </div>
+                <div className="flex gap-3 pt-1">
+                  <button type="button" onClick={() => setShowLoanForm(false)}
+                    className="flex-1 border border-neutral-200 text-neutral-700 hover:bg-neutral-50 text-xs font-semibold py-2 rounded-lg cursor-pointer">
+                    Cancel
+                  </button>
+                  <button type="submit" disabled={loanSubmitting}
+                    className="flex-1 bg-neutral-900 hover:bg-neutral-800 disabled:bg-neutral-300 text-white text-xs font-semibold py-2 rounded-lg cursor-pointer flex items-center justify-center gap-1.5">
+                    {loanSubmitting ? <Loader className="w-3.5 h-3.5 animate-spin" /> : <PlusCircle className="w-3.5 h-3.5" />}
+                    {loanSubmitting ? 'Submitting...' : 'Submit Application'}
+                  </button>
+                </div>
+              </form>
+            </div>
+          ) : myLoanApps.length === 0 ? (
+            <div className="bg-neutral-50 border border-neutral-200 rounded-xl p-6 text-center">
+              <p className="text-xs text-neutral-500">No loan applications yet. Click <strong>Apply for Loan</strong> to get started.</p>
+            </div>
+          ) : (
+            <div className="bg-white border border-neutral-200 rounded-xl overflow-hidden shadow-sm">
+              <table className="w-full text-left text-xs border-collapse">
+                <thead>
+                  <tr className="bg-neutral-50 border-b border-neutral-200 text-[10px] uppercase font-bold text-neutral-400">
+                    <th className="py-2.5 px-4">Product</th>
+                    <th className="py-2.5 px-4">Amount</th>
+                    <th className="py-2.5 px-4">Term</th>
+                    <th className="py-2.5 px-4">Status</th>
+                    <th className="py-2.5 px-4">Applied</th>
+                    <th className="py-2.5 px-4"></th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-neutral-100">
+                  {myLoanApps.map(a => {
+                    const statusDot = (s: string) => {
+                      switch (s) {
+                        case 'pending':   return <span className="inline-flex items-center gap-1.5 text-[10px] font-medium text-amber-600"><span className="w-1.5 h-1.5 rounded-full bg-amber-400 shrink-0" />Pending</span>;
+                        case 'approved':  return <span className="inline-flex items-center gap-1.5 text-[10px] font-medium text-emerald-600"><span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0" />Approved</span>;
+                        case 'rejected':  return <span className="inline-flex items-center gap-1.5 text-[10px] font-medium text-red-500"><span className="w-1.5 h-1.5 rounded-full bg-red-400 shrink-0" />Rejected</span>;
+                        case 'cancelled': return <span className="inline-flex items-center gap-1.5 text-[10px] font-medium text-neutral-400"><span className="w-1.5 h-1.5 rounded-full bg-neutral-300 shrink-0" />Cancelled</span>;
+                        default: return null;
+                      }
+                    };
+                    return (
+                      <tr key={a.id} className="hover:bg-neutral-50/40">
+                        <td className="py-3 px-4 font-medium text-neutral-800">{a.loanProductName}</td>
+                        <td className="py-3 px-4 font-mono text-neutral-900">{settings.currencySymbol}{(a.requestedAmountCents / 100).toLocaleString('en-US', { minimumFractionDigits: 2 })}</td>
+                        <td className="py-3 px-4 text-neutral-500">{a.termMonths} mo.</td>
+                        <td className="py-3 px-4">{statusDot(a.status)}</td>
+                        <td className="py-3 px-4 text-neutral-400 font-mono text-[10px]">{new Date(a.createdAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}</td>
+                        <td className="py-3 px-4 text-right">
+                          {a.status === 'pending' && (
+                            <button onClick={() => handleCancelApp(a.id)}
+                              className="flex items-center gap-1 text-[11px] text-neutral-400 hover:text-red-500 cursor-pointer transition-colors">
+                              <Ban className="w-3 h-3" />Cancel
+                            </button>
+                          )}
+                          {a.status === 'rejected' && a.reviewNotes && (
+                            <span className="text-[10px] text-red-400 italic max-w-[160px] truncate block text-right" title={a.reviewNotes}>
+                              "{a.reviewNotes}"
+                            </span>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
           )}
         </div>
       </div>

@@ -19,6 +19,7 @@ import {
   loanProducts,
   loanApprovalMatrix,
   departments,
+  loanApplications,
 } from './src/db/schema.ts';
 import {
   seedChartOfAccounts,
@@ -30,6 +31,38 @@ import {
 import { requireAuth, AuthRequest } from './src/middleware/auth.ts';
 import { PENDING_UID_PREFIX } from './src/db/users-helper.ts';
 import { eq, and, desc, asc, sql, like, or, count } from 'drizzle-orm';
+
+// ---------------------------------------------------------------------------
+// HR Employee cache — refreshed every 10 minutes, avoids hitting the API on
+// every registration check while keeping data fresh without a manual sync.
+// ---------------------------------------------------------------------------
+interface HREmployee {
+  employee_id: string;
+  first_name: string;
+  middle_name: string | null;
+  last_name: string;
+}
+let hrEmployeeCache: HREmployee[] = [];
+let hrCacheLastFetched = 0;
+const HR_CACHE_TTL_MS = 10 * 60 * 1000; // 10 minutes
+
+async function getHREmployees(): Promise<HREmployee[]> {
+  const now = Date.now();
+  if (hrEmployeeCache.length > 0 && now - hrCacheLastFetched < HR_CACHE_TTL_MS) {
+    return hrEmployeeCache;
+  }
+  const apiUrl = process.env.EMPLOYEE_API_URL || 'https://pos.hilotcenter.cloud/api/employees';
+  const apiKey = process.env.EMPLOYEE_API_KEY || '';
+  if (!apiKey) return hrEmployeeCache; // return stale cache if no key
+  try {
+    const res = await fetch(apiUrl, { headers: { 'x-api-key': apiKey } });
+    if (res.ok) {
+      hrEmployeeCache = await res.json();
+      hrCacheLastFetched = now;
+    }
+  } catch {}
+  return hrEmployeeCache;
+}
 
 export async function createApp() {
   const app = express();
@@ -44,6 +77,181 @@ export async function createApp() {
     console.error('[startup] Seed failed (will retry on next request):', err);
   }
 
+  // Auto-create all tables if they don't exist (safe on re-runs — IF NOT EXISTS)
+  // Order matters: parent tables before child tables (FK dependency order)
+  try {
+    await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS users (
+        id SERIAL PRIMARY KEY,
+        uid TEXT NOT NULL UNIQUE,
+        email TEXT NOT NULL UNIQUE,
+        display_name TEXT,
+        role TEXT NOT NULL,
+        is_active BOOLEAN NOT NULL DEFAULT TRUE,
+        employee_id_verified BOOLEAN NOT NULL DEFAULT TRUE,
+        pending_employee_id TEXT,
+        avatar_url TEXT,
+        phone TEXT,
+        created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMP NOT NULL DEFAULT NOW()
+      );
+
+      CREATE TABLE IF NOT EXISTS chart_of_accounts (
+        code TEXT PRIMARY KEY,
+        name TEXT NOT NULL,
+        type TEXT NOT NULL,
+        normal_balance TEXT NOT NULL,
+        description TEXT
+      );
+
+      CREATE TABLE IF NOT EXISTS members (
+        id SERIAL PRIMARY KEY,
+        user_id INTEGER REFERENCES users(id),
+        employee_id TEXT NOT NULL UNIQUE,
+        first_name TEXT NOT NULL,
+        last_name TEXT NOT NULL,
+        email TEXT NOT NULL UNIQUE,
+        phone TEXT,
+        department TEXT,
+        is_active BOOLEAN NOT NULL DEFAULT TRUE,
+        created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMP NOT NULL DEFAULT NOW()
+      );
+
+      CREATE TABLE IF NOT EXISTS app_settings (
+        key TEXT PRIMARY KEY,
+        value TEXT NOT NULL,
+        updated_at TIMESTAMP NOT NULL DEFAULT NOW()
+      );
+
+      CREATE TABLE IF NOT EXISTS valid_employee_ids (
+        id SERIAL PRIMARY KEY,
+        employee_id TEXT NOT NULL UNIQUE,
+        first_name TEXT,
+        middle_name TEXT,
+        last_name TEXT,
+        is_claimed BOOLEAN NOT NULL DEFAULT FALSE,
+        claimed_by_user_id INTEGER REFERENCES users(id),
+        created_at TIMESTAMP NOT NULL DEFAULT NOW()
+      );
+
+      CREATE TABLE IF NOT EXISTS membership_types (
+        id SERIAL PRIMARY KEY,
+        name TEXT NOT NULL UNIQUE,
+        description TEXT,
+        is_active BOOLEAN NOT NULL DEFAULT TRUE,
+        sort_order INTEGER NOT NULL DEFAULT 0,
+        created_at TIMESTAMP NOT NULL DEFAULT NOW()
+      );
+
+      CREATE TABLE IF NOT EXISTS membership_statuses (
+        id SERIAL PRIMARY KEY,
+        name TEXT NOT NULL UNIQUE,
+        description TEXT,
+        is_active BOOLEAN NOT NULL DEFAULT TRUE,
+        sort_order INTEGER NOT NULL DEFAULT 0,
+        created_at TIMESTAMP NOT NULL DEFAULT NOW()
+      );
+
+      CREATE TABLE IF NOT EXISTS savings_products (
+        id SERIAL PRIMARY KEY,
+        name TEXT NOT NULL UNIQUE,
+        description TEXT,
+        interest_rate_bps INTEGER NOT NULL DEFAULT 0,
+        min_balance_cents INTEGER NOT NULL DEFAULT 0,
+        is_active BOOLEAN NOT NULL DEFAULT TRUE,
+        created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMP NOT NULL DEFAULT NOW()
+      );
+
+      CREATE TABLE IF NOT EXISTS loan_products (
+        id SERIAL PRIMARY KEY,
+        name TEXT NOT NULL UNIQUE,
+        description TEXT,
+        interest_rate_bps INTEGER NOT NULL,
+        max_term_months INTEGER NOT NULL,
+        min_amount_cents INTEGER NOT NULL,
+        max_amount_cents INTEGER NOT NULL,
+        is_active BOOLEAN NOT NULL DEFAULT TRUE,
+        created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMP NOT NULL DEFAULT NOW()
+      );
+
+      CREATE TABLE IF NOT EXISTS loan_approval_matrix (
+        id SERIAL PRIMARY KEY,
+        role TEXT NOT NULL,
+        max_amount_cents INTEGER NOT NULL,
+        loan_product_id INTEGER REFERENCES loan_products(id) ON DELETE CASCADE,
+        created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMP NOT NULL DEFAULT NOW()
+      );
+
+      CREATE TABLE IF NOT EXISTS departments (
+        id SERIAL PRIMARY KEY,
+        name TEXT NOT NULL UNIQUE,
+        code TEXT NOT NULL UNIQUE,
+        is_active BOOLEAN NOT NULL DEFAULT TRUE,
+        created_at TIMESTAMP NOT NULL DEFAULT NOW()
+      );
+
+      CREATE TABLE IF NOT EXISTS transactions (
+        id SERIAL PRIMARY KEY,
+        member_id INTEGER NOT NULL REFERENCES members(id),
+        transaction_type TEXT NOT NULL,
+        amount INTEGER NOT NULL,
+        status TEXT NOT NULL DEFAULT 'completed',
+        reference_number TEXT NOT NULL UNIQUE,
+        description TEXT,
+        created_by INTEGER NOT NULL REFERENCES users(id),
+        reversing_transaction_id INTEGER,
+        created_at TIMESTAMP NOT NULL DEFAULT NOW()
+      );
+
+      CREATE TABLE IF NOT EXISTS journal_entries (
+        id SERIAL PRIMARY KEY,
+        transaction_id INTEGER REFERENCES transactions(id),
+        description TEXT NOT NULL,
+        entry_date TIMESTAMP NOT NULL DEFAULT NOW(),
+        created_at TIMESTAMP NOT NULL DEFAULT NOW()
+      );
+
+      CREATE TABLE IF NOT EXISTS journal_entry_lines (
+        id SERIAL PRIMARY KEY,
+        journal_entry_id INTEGER NOT NULL REFERENCES journal_entries(id) ON DELETE CASCADE,
+        coa_code TEXT NOT NULL REFERENCES chart_of_accounts(code),
+        member_id INTEGER REFERENCES members(id),
+        entry_type TEXT NOT NULL,
+        amount INTEGER NOT NULL
+      );
+
+      CREATE TABLE IF NOT EXISTS audit_logs (
+        id SERIAL PRIMARY KEY,
+        user_id INTEGER REFERENCES users(id),
+        action TEXT NOT NULL,
+        details TEXT,
+        created_at TIMESTAMP NOT NULL DEFAULT NOW()
+      );
+
+      CREATE TABLE IF NOT EXISTS loan_applications (
+        id SERIAL PRIMARY KEY,
+        member_id INTEGER NOT NULL REFERENCES members(id),
+        loan_product_id INTEGER NOT NULL REFERENCES loan_products(id),
+        requested_amount_cents INTEGER NOT NULL,
+        term_months INTEGER NOT NULL,
+        purpose TEXT NOT NULL,
+        status TEXT NOT NULL DEFAULT 'pending',
+        review_notes TEXT,
+        reviewed_by INTEGER REFERENCES users(id),
+        reviewed_at TIMESTAMP,
+        created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMP NOT NULL DEFAULT NOW()
+      );
+    `);
+    console.log('[startup] Schema bootstrap complete.');
+  } catch (err) {
+    console.error('[startup] Schema bootstrap failed:', err);
+  }
+
   // --- API Routes Definition ---
 
   // Public: validate an employee ID during registration — returns name if found and unclaimed.
@@ -52,18 +260,24 @@ export async function createApp() {
       const empId = req.params.id.trim();
       if (!empId) return res.status(400).json({ error: 'Employee ID is required.' });
 
-      const entry = await db.select().from(validEmployeeIds)
-        .where(eq(validEmployeeIds.employeeId, empId))
-        .limit(1);
+      // 1. Check HR API (cached) — source of truth for valid employee IDs
+      const hrEmployees = await getHREmployees();
+      const hrEmployee = hrEmployees.find(e => e.employee_id === empId);
 
-      if (entry.length === 0) {
+      if (!hrEmployee) {
         return res.json({ found: false, reason: 'not_found' });
       }
-      if (entry[0].isClaimed) {
+
+      // 2. Check local DB for claimed status
+      const claimed = await db.select().from(validEmployeeIds)
+        .where(and(eq(validEmployeeIds.employeeId, empId), eq(validEmployeeIds.isClaimed, true)))
+        .limit(1);
+
+      if (claimed.length > 0) {
         return res.json({ found: false, reason: 'already_claimed' });
       }
 
-      const fullName = [entry[0].firstName, entry[0].middleName, entry[0].lastName]
+      const fullName = [hrEmployee.first_name, hrEmployee.middle_name, hrEmployee.last_name]
         .filter(Boolean).join(' ');
       res.json({ found: true, fullName, employeeId: empId });
     } catch (err: any) {
@@ -93,19 +307,34 @@ export async function createApp() {
       let displayName = normalizedEmail.split('@')[0];
       let pendingEmployeeId: string | null = null;
 
-      // If an employee ID was provided, validate it and pull the name from the roster
+      // If an employee ID was provided, validate against HR API
       if (employeeId) {
         const empIdTrimmed = employeeId.trim();
-        const rosterEntry = await db.select().from(validEmployeeIds)
-          .where(and(eq(validEmployeeIds.employeeId, empIdTrimmed), eq(validEmployeeIds.isClaimed, false)))
-          .limit(1);
 
-        if (rosterEntry.length === 0) {
+        const hrEmployees = await getHREmployees();
+        const hrEmployee = hrEmployees.find(e => e.employee_id === empIdTrimmed);
+        if (!hrEmployee) {
           return res.status(400).json({ error: 'Employee ID not found or already claimed.' });
         }
 
+        // Check if already claimed
+        const claimed = await db.select().from(validEmployeeIds)
+          .where(and(eq(validEmployeeIds.employeeId, empIdTrimmed), eq(validEmployeeIds.isClaimed, true)))
+          .limit(1);
+        if (claimed.length > 0) {
+          return res.status(400).json({ error: 'Employee ID not found or already claimed.' });
+        }
+
+        // Upsert into validEmployeeIds so claimed status can be tracked on approval
+        await db.insert(validEmployeeIds).values({
+          employeeId: empIdTrimmed,
+          firstName: hrEmployee.first_name || null,
+          middleName: hrEmployee.middle_name || null,
+          lastName: hrEmployee.last_name || null,
+        }).onConflictDoNothing();
+
         pendingEmployeeId = empIdTrimmed;
-        displayName = [rosterEntry[0].firstName, rosterEntry[0].middleName, rosterEntry[0].lastName]
+        displayName = [hrEmployee.first_name, hrEmployee.middle_name, hrEmployee.last_name]
           .filter(Boolean).join(' ') || displayName;
       }
 
@@ -448,6 +677,45 @@ export async function createApp() {
     }
   });
 
+  // Admin direct-create: create an active user account without self-registration (System Admin only)
+  app.post('/api/users/admin-create', requireAuth, async (req: AuthRequest, res) => {
+    try {
+      if (req.dbUser?.role !== 'System Admin') {
+        return res.status(403).json({ error: 'Access Denied' });
+      }
+      const { displayName, email, role } = req.body;
+      if (!displayName || !email || !role) {
+        return res.status(400).json({ error: 'displayName, email, and role are required.' });
+      }
+      // Check for duplicate email
+      const existing = await db.select().from(users).where(eq(users.email, email.toLowerCase().trim())).limit(1);
+      if (existing.length > 0) {
+        return res.status(409).json({ error: 'An account with this email already exists.' });
+      }
+      const uid = `manual:${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+      const [created] = await db.insert(users).values({
+        uid,
+        email: email.toLowerCase().trim(),
+        displayName: displayName.trim(),
+        role,
+        isActive: true,
+        employeeIdVerified: false,
+        pendingEmployeeId: null,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      }).returning();
+      await db.insert(auditLogs).values({
+        userId: req.dbUser!.id,
+        action: 'admin_create_user',
+        details: JSON.stringify({ createdUserId: created.id, displayName, email, role }),
+        createdAt: new Date(),
+      });
+      res.status(201).json(created);
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
   // Deactivate or activate a system user (System Admin only)
   app.put('/api/users/:id/status', requireAuth, async (req: AuthRequest, res) => {
     try {
@@ -539,6 +807,52 @@ export async function createApp() {
 
       const rows = await db.select().from(appSettings);
       res.json(Object.fromEntries(rows.map(r => [r.key, r.value])));
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // Sync employee roster from external HR API (System Admin only)
+  app.post('/api/settings/sync-employees', requireAuth, async (req: AuthRequest, res) => {
+    try {
+      if (req.dbUser?.role !== 'System Admin') {
+        return res.status(403).json({ error: 'Access Denied: System Admin only.' });
+      }
+
+      const apiUrl = process.env.EMPLOYEE_API_URL || 'https://pos.hilotcenter.cloud/api/employees';
+      const apiKey = process.env.EMPLOYEE_API_KEY || '';
+      if (!apiKey) return res.status(500).json({ error: 'EMPLOYEE_API_KEY environment variable is not set.' });
+
+      const response = await fetch(apiUrl, { headers: { 'x-api-key': apiKey } });
+      if (!response.ok) throw new Error(`HR API returned ${response.status}`);
+
+      const employees: any[] = await response.json();
+      const values = employees
+        .map(e => ({
+          employeeId: String(e.employee_id || e.id || '').trim(),
+          firstName: String(e.first_name || '').trim() || null,
+          middleName: String(e.middle_name || '').trim() || null,
+          lastName: String(e.last_name || '').trim() || null,
+        }))
+        .filter(v => v.employeeId);
+
+      // Upsert: update names if employee already exists, preserve claimed status
+      for (const v of values) {
+        await db.insert(validEmployeeIds)
+          .values(v)
+          .onConflictDoUpdate({
+            target: validEmployeeIds.employeeId,
+            set: { firstName: v.firstName, middleName: v.middleName, lastName: v.lastName },
+          });
+      }
+
+      await db.insert(auditLogs).values({
+        userId: req.dbUser!.id,
+        action: 'SYNC_EMPLOYEE_ROSTER',
+        details: `Synced ${values.length} employees from HR API (${apiUrl})`,
+      });
+
+      res.json({ synced: values.length });
     } catch (err: any) {
       res.status(500).json({ error: err.message });
     }
@@ -1402,6 +1716,176 @@ export async function createApp() {
       const rows = await db.select().from(appSettings).where(sql`${appSettings.key} = ANY(${PARAM_KEYS})`);
       res.json(Object.fromEntries(rows.map(r => [r.key, r.value])));
     } catch (err: any) { res.status(500).json({ error: err.message }); }
+  });
+
+  // ── Loan Applications ──────────────────────────────────────────────────
+
+  // Member submits a loan application
+  app.post('/api/loan-applications', requireAuth, async (req: AuthRequest, res) => {
+    try {
+      // Find the member linked to this user
+      const member = await db.select().from(members).where(eq(members.userId, req.dbUser!.id)).limit(1);
+      if (!member[0]) return res.status(404).json({ error: 'No member profile linked to your account.' });
+
+      const { loanProductId, requestedAmountCents, termMonths, purpose } = req.body;
+      if (!loanProductId || !requestedAmountCents || !termMonths || !purpose) {
+        return res.status(400).json({ error: 'loanProductId, requestedAmountCents, termMonths, and purpose are required.' });
+      }
+
+      // Validate against loan product limits
+      const product = await db.select().from(loanProducts).where(and(eq(loanProducts.id, loanProductId), eq(loanProducts.isActive, true))).limit(1);
+      if (!product[0]) return res.status(404).json({ error: 'Loan product not found or inactive.' });
+      if (requestedAmountCents < product[0].minAmountCents) {
+        return res.status(400).json({ error: `Amount is below the minimum of ${product[0].minAmountCents / 100}.` });
+      }
+      if (requestedAmountCents > product[0].maxAmountCents) {
+        return res.status(400).json({ error: `Amount exceeds the maximum of ${product[0].maxAmountCents / 100}.` });
+      }
+      if (termMonths > product[0].maxTermMonths) {
+        return res.status(400).json({ error: `Term exceeds the maximum of ${product[0].maxTermMonths} months.` });
+      }
+
+      // Check for existing pending application
+      const existing = await db.select().from(loanApplications)
+        .where(and(eq(loanApplications.memberId, member[0].id), eq(loanApplications.status, 'pending')))
+        .limit(1);
+      if (existing[0]) return res.status(409).json({ error: 'You already have a pending loan application. Wait for it to be reviewed before submitting another.' });
+
+      const [loanApp] = await db.insert(loanApplications).values({
+        memberId: member[0].id,
+        loanProductId,
+        requestedAmountCents,
+        termMonths,
+        purpose: purpose.trim(),
+        status: 'pending',
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      }).returning();
+
+      res.status(201).json(loanApp);
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // Member views their own loan applications
+  app.get('/api/loan-applications/my', requireAuth, async (req: AuthRequest, res) => {
+    try {
+      const member = await db.select().from(members).where(eq(members.userId, req.dbUser!.id)).limit(1);
+      if (!member[0]) return res.json([]);
+
+      const rows = await db.select({
+        id: loanApplications.id,
+        requestedAmountCents: loanApplications.requestedAmountCents,
+        termMonths: loanApplications.termMonths,
+        purpose: loanApplications.purpose,
+        status: loanApplications.status,
+        reviewNotes: loanApplications.reviewNotes,
+        reviewedAt: loanApplications.reviewedAt,
+        createdAt: loanApplications.createdAt,
+        loanProductName: loanProducts.name,
+        loanProductInterestBps: loanProducts.interestRateBps,
+      }).from(loanApplications)
+        .leftJoin(loanProducts, eq(loanApplications.loanProductId, loanProducts.id))
+        .where(eq(loanApplications.memberId, member[0].id))
+        .orderBy(desc(loanApplications.createdAt));
+
+      res.json(rows);
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // Staff views all loan applications (System Admin, Manager, Accounting Officer, Cashier, Auditor)
+  app.get('/api/loan-applications', requireAuth, async (req: AuthRequest, res) => {
+    try {
+      const allowed = ['System Admin', 'Manager', 'Accounting Officer', 'Cashier', 'Auditor'];
+      if (!allowed.includes(req.dbUser?.role || '')) return res.status(403).json({ error: 'Access denied.' });
+
+      const rows = await db.select({
+        id: loanApplications.id,
+        requestedAmountCents: loanApplications.requestedAmountCents,
+        termMonths: loanApplications.termMonths,
+        purpose: loanApplications.purpose,
+        status: loanApplications.status,
+        reviewNotes: loanApplications.reviewNotes,
+        reviewedAt: loanApplications.reviewedAt,
+        createdAt: loanApplications.createdAt,
+        updatedAt: loanApplications.updatedAt,
+        loanProductName: loanProducts.name,
+        loanProductInterestBps: loanProducts.interestRateBps,
+        memberFirstName: members.firstName,
+        memberLastName: members.lastName,
+        memberEmployeeId: members.employeeId,
+        memberDepartment: members.department,
+        memberId: members.id,
+      }).from(loanApplications)
+        .leftJoin(loanProducts, eq(loanApplications.loanProductId, loanProducts.id))
+        .leftJoin(members, eq(loanApplications.memberId, members.id))
+        .orderBy(desc(loanApplications.createdAt));
+
+      res.json(rows);
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // Staff reviews (approve/reject) a loan application
+  app.put('/api/loan-applications/:id/review', requireAuth, async (req: AuthRequest, res) => {
+    try {
+      const allowed = ['System Admin', 'Manager', 'Accounting Officer'];
+      if (!allowed.includes(req.dbUser?.role || '')) return res.status(403).json({ error: 'Access denied.' });
+
+      const { status, reviewNotes } = req.body;
+      if (!status || !['approved', 'rejected'].includes(status)) {
+        return res.status(400).json({ error: 'status must be "approved" or "rejected".' });
+      }
+
+      const appId = parseInt(req.params.id, 10);
+      const existing = await db.select().from(loanApplications).where(eq(loanApplications.id, appId)).limit(1);
+      if (!existing[0]) return res.status(404).json({ error: 'Application not found.' });
+      if (existing[0].status !== 'pending') return res.status(409).json({ error: 'This application has already been reviewed.' });
+
+      const [updated] = await db.update(loanApplications)
+        .set({ status, reviewNotes: reviewNotes || null, reviewedBy: req.dbUser!.id, reviewedAt: new Date(), updatedAt: new Date() })
+        .where(eq(loanApplications.id, appId))
+        .returning();
+
+      await db.insert(auditLogs).values({
+        userId: req.dbUser!.id,
+        action: `loan_application_${status}`,
+        details: JSON.stringify({ applicationId: appId, reviewNotes }),
+        createdAt: new Date(),
+      });
+
+      res.json(updated);
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // Member cancels their own pending application
+  app.put('/api/loan-applications/:id/cancel', requireAuth, async (req: AuthRequest, res) => {
+    try {
+      const member = await db.select().from(members).where(eq(members.userId, req.dbUser!.id)).limit(1);
+      if (!member[0]) return res.status(403).json({ error: 'No member profile.' });
+
+      const appId = parseInt(req.params.id, 10);
+      const existing = await db.select().from(loanApplications)
+        .where(and(eq(loanApplications.id, appId), eq(loanApplications.memberId, member[0].id)))
+        .limit(1);
+      if (!existing[0]) return res.status(404).json({ error: 'Application not found.' });
+      if (existing[0].status !== 'pending') return res.status(409).json({ error: 'Only pending applications can be cancelled.' });
+
+      const [updated] = await db.update(loanApplications)
+        .set({ status: 'cancelled', updatedAt: new Date() })
+        .where(eq(loanApplications.id, appId))
+        .returning();
+
+      res.json(updated);
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
   });
 
   // --- VITE DEV MIDDLEWARE AND CLIENT SERVING FALLBACKS ---

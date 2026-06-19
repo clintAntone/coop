@@ -233,7 +233,7 @@ export default function AuthScreen({ onMockLogin, isLoading, errorMsg, settings 
               <input
                 type="email"
                 className="w-full text-xs p-2.5 border border-neutral-200 bg-white rounded-lg focus:outline-none focus:ring-1 focus:ring-black text-neutral-850"
-                placeholder="Enter corporate email"
+                placeholder="Enter email address"
                 value={email}
                 onChange={e => setEmail(e.target.value)}
                 required
@@ -268,7 +268,7 @@ export default function AuthScreen({ onMockLogin, isLoading, errorMsg, settings 
         </div>
 
         <div className="bg-neutral-50 border-t border-neutral-100 px-6 py-4 flex items-center justify-between text-[10px] text-neutral-400">
-          <span>Production Ready Supabase Core</span>
+          <span>Development - HC Koop</span>
           <span className="font-mono text-[9px]">v1.0.0 (PostgreSQL Mode)</span>
         </div>
       </motion.div>
