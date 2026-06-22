@@ -1,5 +1,7 @@
 import express from 'express';
 import path from 'path';
+import crypto from 'crypto';
+import { Resend } from 'resend';
 // Vite is only used in dev — dynamic import avoids bundling it in production
 type ViteDevServer = any;
 import { db } from './src/db/index.ts';
@@ -92,9 +94,13 @@ export async function createApp() {
         pending_employee_id TEXT,
         avatar_url TEXT,
         phone TEXT,
+        temp_pin TEXT,
+        must_change_password BOOLEAN NOT NULL DEFAULT FALSE,
         created_at TIMESTAMP NOT NULL DEFAULT NOW(),
         updated_at TIMESTAMP NOT NULL DEFAULT NOW()
       );
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS temp_pin TEXT;
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS must_change_password BOOLEAN NOT NULL DEFAULT FALSE;
 
       CREATE TABLE IF NOT EXISTS chart_of_accounts (
         code TEXT PRIMARY KEY,
@@ -350,6 +356,87 @@ export async function createApp() {
       }).onConflictDoNothing();
 
       res.json({ ok: true });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // Send credentials email via Resend
+  const sendCredentialsEmail = async (to: string, displayName: string, tempPassword: string, appName: string) => {
+    const apiKey = process.env.RESEND_API_KEY;
+    if (!apiKey) { console.warn('RESEND_API_KEY not set — skipping credentials email.'); return; }
+    const resend = new Resend(apiKey);
+    await resend.emails.send({
+      from: process.env.RESEND_FROM_EMAIL || `${appName} <onboarding@resend.dev>`,
+      to,
+      subject: `Your ${appName} account credentials`,
+      html: `
+        <div style="font-family:sans-serif;max-width:480px;margin:0 auto;padding:24px;">
+          <h2 style="margin-bottom:4px;">${appName}</h2>
+          <p style="color:#666;margin-top:0;">Employee Account Created</p>
+          <hr style="border:none;border-top:1px solid #eee;margin:16px 0;" />
+          <p>Hi <strong>${displayName}</strong>,</p>
+          <p>An account has been created for you. Use the credentials below to log in:</p>
+          <div style="background:#f5f5f5;border-radius:8px;padding:16px;margin:16px 0;">
+            <p style="margin:0 0 8px;font-size:12px;color:#888;text-transform:uppercase;letter-spacing:0.05em;">Email</p>
+            <p style="margin:0 0 16px;font-weight:600;">${to}</p>
+            <p style="margin:0 0 8px;font-size:12px;color:#888;text-transform:uppercase;letter-spacing:0.05em;">Temporary Password</p>
+            <p style="margin:0;font-size:22px;font-weight:700;letter-spacing:0.15em;font-family:monospace;">${tempPassword}</p>
+          </div>
+          <p style="color:#666;font-size:13px;">Select <strong>"Staff Password Login"</strong> on the login screen and enter your email and the temporary password above.</p>
+          <p style="color:#999;font-size:12px;margin-top:24px;">This is an automated message from ${appName}. Please keep your credentials secure.</p>
+        </div>
+      `,
+    });
+  };
+
+  // PIN login for manually-created employee accounts (no Supabase account required)
+  app.post('/api/auth/pin-login', async (req, res) => {
+    try {
+      const { email, pin } = req.body;
+      if (!email || !pin) return res.status(400).json({ error: 'Email and PIN are required.' });
+      const found = await db.select().from(users).where(eq(users.email, email.toLowerCase().trim())).limit(1);
+      if (!found.length || !found[0].tempPin) {
+        return res.status(401).json({ error: 'Invalid email or PIN.' });
+      }
+      const u = found[0];
+      const hash = crypto.createHash('sha256').update(pin.trim() + u.uid).digest('hex');
+      if (hash !== u.tempPin) return res.status(401).json({ error: 'Invalid email or PIN.' });
+      if (!u.isActive) return res.status(403).json({ error: 'This account has been suspended.' });
+      const token = `pin-token-${u.uid}|${u.email}`;
+      res.json({ token, user: u, mustChangePassword: u.mustChangePassword });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // Detect account type (manual vs supabase) — no auth required
+  app.get('/api/auth/account-type', async (req, res) => {
+    try {
+      const email = (req.query.email as string || '').toLowerCase().trim();
+      if (!email) return res.json({ type: 'supabase' });
+      const found = await db.select().from(users).where(eq(users.email, email)).limit(1);
+      if (found.length && found[0].uid.startsWith('manual:')) {
+        return res.json({ type: 'manual' });
+      }
+      return res.json({ type: 'supabase' });
+    } catch { res.json({ type: 'supabase' }); }
+  });
+
+  // Change password for manually-created accounts (requires pin-token auth)
+  app.put('/api/auth/change-password', requireAuth, async (req: AuthRequest, res) => {
+    try {
+      const { currentPassword, newPassword } = req.body;
+      if (!currentPassword || !newPassword) return res.status(400).json({ error: 'Both current and new password required.' });
+      if (newPassword.length < 6) return res.status(400).json({ error: 'New password must be at least 6 characters.' });
+      const u = req.dbUser!;
+      // Verify current password
+      const hash = crypto.createHash('sha256').update(currentPassword.trim() + u.uid).digest('hex');
+      if (hash !== u.tempPin) return res.status(401).json({ error: 'Current password is incorrect.' });
+      // Hash new password
+      const newHash = crypto.createHash('sha256').update(newPassword.trim() + u.uid).digest('hex');
+      await db.update(users).set({ tempPin: newHash, mustChangePassword: false, updatedAt: new Date() }).where(eq(users.id, u.id));
+      res.json({ success: true });
     } catch (err: any) {
       res.status(500).json({ error: err.message });
     }
@@ -683,9 +770,12 @@ export async function createApp() {
       if (req.dbUser?.role !== 'System Admin') {
         return res.status(403).json({ error: 'Access Denied' });
       }
-      const { displayName, email, role } = req.body;
+      const { displayName, email, role, tempPin } = req.body;
       if (!displayName || !email || !role) {
         return res.status(400).json({ error: 'displayName, email, and role are required.' });
+      }
+      if (!tempPin || tempPin.trim().length < 4) {
+        return res.status(400).json({ error: 'A temporary PIN of at least 4 digits is required.' });
       }
       // Check for duplicate email
       const existing = await db.select().from(users).where(eq(users.email, email.toLowerCase().trim())).limit(1);
@@ -693,6 +783,7 @@ export async function createApp() {
         return res.status(409).json({ error: 'An account with this email already exists.' });
       }
       const uid = `manual:${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+      const hashedPin = crypto.createHash('sha256').update(tempPin.trim() + uid).digest('hex');
       const [created] = await db.insert(users).values({
         uid,
         email: email.toLowerCase().trim(),
@@ -701,6 +792,8 @@ export async function createApp() {
         isActive: true,
         employeeIdVerified: false,
         pendingEmployeeId: null,
+        tempPin: hashedPin,
+        mustChangePassword: true,
         createdAt: new Date(),
         updatedAt: new Date(),
       }).returning();
@@ -710,6 +803,11 @@ export async function createApp() {
         details: JSON.stringify({ createdUserId: created.id, displayName, email, role }),
         createdAt: new Date(),
       });
+      // Send credentials email (fire-and-forget — don't fail the request if email fails)
+      const settingsRows = await db.select().from(appSettings);
+      const settingsMap: Record<string, string> = Object.fromEntries(settingsRows.map(r => [r.key, r.value]));
+      const appName = settingsMap['app_name'] || 'Cooperative System';
+      sendCredentialsEmail(email.toLowerCase().trim(), displayName.trim(), tempPin.trim(), appName).catch(e => console.error('Credentials email failed:', e));
       res.status(201).json(created);
     } catch (err: any) {
       res.status(500).json({ error: err.message });

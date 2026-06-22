@@ -13,6 +13,8 @@ export const users = pgTable('users', {
   pendingEmployeeId: text('pending_employee_id'), // Set at registration; used to auto-link on approval
   avatarUrl: text('avatar_url'), // Base64 data URL or public URL for profile picture
   phone: text('phone'), // User's phone number (independent of member profile)
+  tempPin: text('temp_pin'), // Hashed temporary PIN for manually-created accounts
+  mustChangePassword: boolean('must_change_password').default(false).notNull(),
   createdAt: timestamp('created_at').defaultNow().notNull(),
   updatedAt: timestamp('updated_at').defaultNow().notNull(),
 });

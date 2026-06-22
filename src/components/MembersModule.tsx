@@ -256,14 +256,14 @@ export default function MembersModule({ currentUser, token, settings }: MembersM
   });
 
   return (
-    <div className="flex-grow p-8 overflow-y-auto relative h-screen">
+    <div className="flex-grow p-4 md:p-8 overflow-y-auto relative h-screen">
       {/* Top Header Controls */}
-      <div className="flex items-center justify-between mb-8">
-        <div>
+      <div className="flex items-start justify-between gap-3 mb-8">
+        <div className="min-w-0">
           <h1 className="text-xl font-medium tracking-tight text-neutral-900 font-sans">
             Members Directory
           </h1>
-          <p className="text-xs text-neutral-400 mt-1">
+          <p className="text-xs text-neutral-400 mt-1 hidden sm:block">
             Register and coordinate cooperative members, system seats, and subsidiary ledgers.
           </p>
         </div>
@@ -271,25 +271,26 @@ export default function MembersModule({ currentUser, token, settings }: MembersM
         {['System Admin', 'Manager', 'Accounting Officer', 'Cashier'].includes(currentUser.role) && (
           <button
             onClick={handleOpenCreate}
-            className="flex items-center gap-2 bg-neutral-900 hover:bg-neutral-800 text-white text-xs font-semibold py-2 px-4 rounded-lg shadow-sm transition-all cursor-pointer"
+            className="shrink-0 flex items-center gap-2 bg-neutral-900 hover:bg-neutral-800 text-white text-xs font-semibold py-2 px-3 rounded-lg shadow-sm transition-all cursor-pointer"
           >
             <UserPlus className="w-3.5 h-3.5" />
-            <span>Add Member Profile</span>
+            <span className="hidden sm:inline">Add Member Profile</span>
+            <span className="sm:hidden">Add</span>
           </button>
         )}
       </div>
 
       {/* Main Container: Split screen when Detail Drawer is open */}
-      <div className="flex gap-8 items-start">
+      <div className="flex flex-col lg:flex-row gap-6 lg:items-start">
         {/* Table List Section */}
         <div className="flex-grow bg-white border border-neutral-200/80 rounded-xl shadow-xl shadow-neutral-200/20 overflow-hidden">
           {/* Table Header Filter bar */}
-          <div className="p-4 border-b border-neutral-150 bg-neutral-50/40 flex items-center gap-3">
-            <div className="relative flex-grow max-w-sm">
+          <div className="p-4 border-b border-neutral-150 bg-neutral-50/40 flex items-center gap-2">
+            <div className="relative flex-grow">
               <Search className="absolute left-3 top-2.5 w-4 h-4 text-neutral-400 shrink-0" />
               <input
                 type="text"
-                placeholder="Search by name, employee ID, department..."
+                placeholder="Search members..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 className="w-full text-xs pl-9 pr-4 py-2 border border-neutral-200 rounded-lg bg-white focus:outline-none focus:ring-1 focus:ring-neutral-400 focus:border-neutral-400 text-neutral-800 placeholder-neutral-400"
@@ -297,14 +298,14 @@ export default function MembersModule({ currentUser, token, settings }: MembersM
             </div>
             <button
               onClick={fetchMembers}
-              className="p-2 border border-neutral-200 hover:bg-neutral-50 rounded-lg transition-colors cursor-pointer"
+              className="shrink-0 p-2 border border-neutral-200 hover:bg-neutral-50 rounded-lg transition-colors cursor-pointer"
               title="Refresh profiles list"
             >
               <RefreshCw className="w-4 h-4 text-neutral-500" />
             </button>
             {searchTerm && (
-              <span className="text-[10px] text-neutral-400 font-medium bg-neutral-100 rounded-full px-2 py-0.5">
-                Matched: {filteredMembers.length}
+              <span className="text-[10px] text-neutral-400 font-medium bg-neutral-100 rounded-full px-2 py-0.5 shrink-0">
+                {filteredMembers.length}
               </span>
             )}
           </div>
@@ -375,98 +376,126 @@ export default function MembersModule({ currentUser, token, settings }: MembersM
               })}
             </ul>
           ) : (
-            /* Full table — shown when no drawer is open */
-            <table className="w-full text-left border-collapse table-auto">
-              <thead>
-                <tr className="bg-neutral-50 text-neutral-500 text-[10px] uppercase font-semibold border-b border-neutral-150">
-                  <th className="py-3 px-4">Member</th>
-                  <th className="py-3 px-4">Department</th>
-                  <th className="py-3 px-4 w-20 text-center">Status</th>
-                  {['System Admin', 'Manager', 'Accounting Officer', 'Cashier'].includes(currentUser.role) && (
-                    <th className="py-3 px-4 w-24 text-right">Actions</th>
-                  )}
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-neutral-150 text-xs">
+            <>
+              {/* Mobile: card list */}
+              <ul className="divide-y divide-neutral-100 md:hidden">
                 {filteredMembers.map((member) => {
                   const initials = `${member.firstName?.[0] ?? ''}${member.lastName?.[0] ?? ''}`.toUpperCase();
+                  const canManage = ['System Admin', 'Manager', 'Accounting Officer', 'Cashier'].includes(currentUser.role);
                   return (
-                    <tr
-                      key={member.id}
-                      onClick={() => handleSelectMember(member)}
-                      className="hover:bg-neutral-50/50 cursor-pointer transition-colors"
-                    >
-                      <td className="py-3.5 px-4">
-                        <div className="flex items-center gap-3">
-                          <div className="w-8 h-8 rounded-full bg-neutral-100 border border-neutral-200 flex items-center justify-center text-[11px] font-bold text-neutral-500 shrink-0 uppercase">
-                            {initials || '??'}
-                          </div>
-                          <div>
-                            <div className="font-semibold text-neutral-900">{member.firstName} {member.lastName}</div>
-                            <div className="text-[10px] text-neutral-400 font-mono mt-0.5">{member.employeeId || <span className="italic">No ID</span>}</div>
-                            <div className="text-[10px] text-neutral-400 mt-0.5 truncate max-w-[220px]">{member.email}</div>
+                    <li key={member.id} className="px-4 py-3.5">
+                      <div className="flex items-center gap-3" onClick={() => handleSelectMember(member)}>
+                        <div className="w-10 h-10 rounded-full bg-neutral-100 border border-neutral-200 flex items-center justify-center text-xs font-bold text-neutral-600 shrink-0 uppercase">
+                          {initials || '??'}
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <div className="font-semibold text-neutral-900 text-sm truncate">{member.firstName} {member.lastName}</div>
+                          <div className="text-[11px] text-neutral-400 font-mono mt-0.5 truncate">{member.employeeId || '—'}</div>
+                          <div className="flex items-center gap-2 mt-1">
+                            {member.department && <span className="text-[10px] text-neutral-500">{member.department}</span>}
+                            <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold ${
+                              member.isActive ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-neutral-100 text-neutral-400 border border-neutral-200'
+                            }`}>{member.isActive ? 'Active' : 'Suspended'}</span>
                           </div>
                         </div>
-                      </td>
-                      <td className="py-3.5 px-4 text-neutral-500 text-xs">
-                        {member.department || '—'}
-                      </td>
-                      <td className="py-3.5 px-4 text-center">
-                        <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold ${
-                          member.isActive
-                            ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
-                            : 'bg-neutral-100 text-neutral-400 border border-neutral-200'
-                        }`}>
-                          {member.isActive ? 'Active' : 'Suspended'}
-                        </span>
-                      </td>
-                      {['System Admin', 'Manager', 'Accounting Officer', 'Cashier'].includes(currentUser.role) && (
-                        <td className="py-3.5 px-4 text-right" onClick={(e) => e.stopPropagation()}>
-                          <div className="relative inline-block">
+                        {canManage && (
+                          <div className="relative shrink-0" onClick={(e) => e.stopPropagation()}>
                             <button
                               onClick={() => setOpenMenuId(openMenuId === member.id ? null : member.id)}
-                              className="p-1.5 rounded-lg border border-neutral-200 hover:bg-neutral-100 text-neutral-500 hover:text-neutral-900 transition-colors cursor-pointer"
+                              className="p-2 rounded-lg border border-neutral-200 hover:bg-neutral-100 text-neutral-500 cursor-pointer"
                             >
                               <MoreHorizontal className="w-4 h-4" />
                             </button>
                             {openMenuId === member.id && (
-                              <div
-                                className="absolute right-0 top-8 z-20 w-40 bg-white border border-neutral-200 rounded-xl shadow-xl overflow-hidden"
-                                onMouseLeave={() => setOpenMenuId(null)}
-                              >
-                                <button
-                                  onClick={() => { setOpenMenuId(null); handleOpenEdit(member, { stopPropagation: () => {} } as any); }}
-                                  className="w-full flex items-center gap-2.5 px-3.5 py-2.5 text-xs text-neutral-700 hover:bg-neutral-50 transition-colors cursor-pointer"
-                                >
-                                  <Pencil className="w-3.5 h-3.5 text-neutral-400" />
-                                  Edit Profile
+                              <div className="absolute right-0 top-9 z-20 w-40 bg-white border border-neutral-200 rounded-xl shadow-xl overflow-hidden">
+                                <button onClick={() => { setOpenMenuId(null); handleOpenEdit(member, { stopPropagation: () => {} } as any); }}
+                                  className="w-full flex items-center gap-2.5 px-3.5 py-2.5 text-xs text-neutral-700 hover:bg-neutral-50 cursor-pointer">
+                                  <Pencil className="w-3.5 h-3.5 text-neutral-400" />Edit Profile
                                 </button>
                                 {['System Admin', 'Manager', 'Accounting Officer'].includes(currentUser.role) && (
-                                  <button
-                                    onClick={() => { setOpenMenuId(null); setConfirmModal({ member, action: member.isActive ? 'suspend' : 'activate' }); }}
-                                    title={member.isActive
-                                      ? "Suspends this member's cooperative account. Their membership benefits and ledger access will be frozen until reactivated."
-                                      : "Restores this member's active cooperative membership status."}
-                                    className={`w-full flex items-center gap-2.5 px-3.5 py-2.5 text-xs transition-colors cursor-pointer border-t border-neutral-100 ${
-                                      member.isActive ? 'text-red-600 hover:bg-red-50' : 'text-emerald-700 hover:bg-emerald-50'
-                                    }`}
-                                  >
-                                    {member.isActive
-                                      ? <><UserX className="w-3.5 h-3.5" />Suspend Member</>
-                                      : <><UserCheck className="w-3.5 h-3.5" />Activate Member</>
-                                    }
+                                  <button onClick={() => { setOpenMenuId(null); setConfirmModal({ member, action: member.isActive ? 'suspend' : 'activate' }); }}
+                                    className={`w-full flex items-center gap-2.5 px-3.5 py-2.5 text-xs cursor-pointer border-t border-neutral-100 ${member.isActive ? 'text-red-600 hover:bg-red-50' : 'text-emerald-700 hover:bg-emerald-50'}`}>
+                                    {member.isActive ? <><UserX className="w-3.5 h-3.5" />Suspend</> : <><UserCheck className="w-3.5 h-3.5" />Activate</>}
                                   </button>
                                 )}
                               </div>
                             )}
                           </div>
-                        </td>
-                      )}
-                    </tr>
+                        )}
+                      </div>
+                    </li>
                   );
                 })}
-              </tbody>
-            </table>
+              </ul>
+
+              {/* Desktop: full table */}
+              <div className="hidden md:block overflow-x-auto">
+                <table className="w-full text-left border-collapse table-auto">
+                  <thead>
+                    <tr className="bg-neutral-50 text-neutral-500 text-[10px] uppercase font-semibold border-b border-neutral-150">
+                      <th className="py-3 px-4">Member</th>
+                      <th className="py-3 px-4">Department</th>
+                      <th className="py-3 px-4 w-20 text-center">Status</th>
+                      {['System Admin', 'Manager', 'Accounting Officer', 'Cashier'].includes(currentUser.role) && (
+                        <th className="py-3 px-4 w-24 text-right">Actions</th>
+                      )}
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-neutral-150 text-xs">
+                    {filteredMembers.map((member) => {
+                      const initials = `${member.firstName?.[0] ?? ''}${member.lastName?.[0] ?? ''}`.toUpperCase();
+                      return (
+                        <tr key={member.id} onClick={() => handleSelectMember(member)} className="hover:bg-neutral-50/50 cursor-pointer transition-colors">
+                          <td className="py-3.5 px-4">
+                            <div className="flex items-center gap-3">
+                              <div className="w-8 h-8 rounded-full bg-neutral-100 border border-neutral-200 flex items-center justify-center text-[11px] font-bold text-neutral-500 shrink-0 uppercase">
+                                {initials || '??'}
+                              </div>
+                              <div>
+                                <div className="font-semibold text-neutral-900">{member.firstName} {member.lastName}</div>
+                                <div className="text-[10px] text-neutral-400 font-mono mt-0.5">{member.employeeId || <span className="italic">No ID</span>}</div>
+                                <div className="text-[10px] text-neutral-400 mt-0.5 truncate max-w-[220px]">{member.email}</div>
+                              </div>
+                            </div>
+                          </td>
+                          <td className="py-3.5 px-4 text-neutral-500 text-xs">{member.department || '—'}</td>
+                          <td className="py-3.5 px-4 text-center">
+                            <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold ${
+                              member.isActive ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-neutral-100 text-neutral-400 border border-neutral-200'
+                            }`}>{member.isActive ? 'Active' : 'Suspended'}</span>
+                          </td>
+                          {['System Admin', 'Manager', 'Accounting Officer', 'Cashier'].includes(currentUser.role) && (
+                            <td className="py-3.5 px-4 text-right" onClick={(e) => e.stopPropagation()}>
+                              <div className="relative inline-block">
+                                <button onClick={() => setOpenMenuId(openMenuId === member.id ? null : member.id)}
+                                  className="p-1.5 rounded-lg border border-neutral-200 hover:bg-neutral-100 text-neutral-500 hover:text-neutral-900 transition-colors cursor-pointer">
+                                  <MoreHorizontal className="w-4 h-4" />
+                                </button>
+                                {openMenuId === member.id && (
+                                  <div className="absolute right-0 top-8 z-20 w-40 bg-white border border-neutral-200 rounded-xl shadow-xl overflow-hidden" onMouseLeave={() => setOpenMenuId(null)}>
+                                    <button onClick={() => { setOpenMenuId(null); handleOpenEdit(member, { stopPropagation: () => {} } as any); }}
+                                      className="w-full flex items-center gap-2.5 px-3.5 py-2.5 text-xs text-neutral-700 hover:bg-neutral-50 transition-colors cursor-pointer">
+                                      <Pencil className="w-3.5 h-3.5 text-neutral-400" />Edit Profile
+                                    </button>
+                                    {['System Admin', 'Manager', 'Accounting Officer'].includes(currentUser.role) && (
+                                      <button onClick={() => { setOpenMenuId(null); setConfirmModal({ member, action: member.isActive ? 'suspend' : 'activate' }); }}
+                                        title={member.isActive ? "Suspends this member's cooperative account." : "Restores this member's active membership."}
+                                        className={`w-full flex items-center gap-2.5 px-3.5 py-2.5 text-xs transition-colors cursor-pointer border-t border-neutral-100 ${member.isActive ? 'text-red-600 hover:bg-red-50' : 'text-emerald-700 hover:bg-emerald-50'}`}>
+                                        {member.isActive ? <><UserX className="w-3.5 h-3.5" />Suspend Member</> : <><UserCheck className="w-3.5 h-3.5" />Activate Member</>}
+                                      </button>
+                                    )}
+                                  </div>
+                                )}
+                              </div>
+                            </td>
+                          )}
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </>
           )}
         </div>
 
@@ -474,11 +503,11 @@ export default function MembersModule({ currentUser, token, settings }: MembersM
         <AnimatePresence>
           {activeDrawerMember && (
             <motion.div
-              initial={{ opacity: 0, x: 24, width: 0 }}
-              animate={{ opacity: 1, x: 0, width: '45%' }}
-              exit={{ opacity: 0, x: 24, width: 0 }}
+              initial={{ opacity: 0, x: 24 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: 24 }}
               transition={{ type: 'spring', damping: 25, stiffness: 200 }}
-              className="bg-white border border-neutral-200 shadow-2xl rounded-xl shrink-0 overflow-hidden flex flex-col h-[calc(100vh-140px)] sticky top-[100px]"
+              className="bg-white border border-neutral-200 shadow-2xl rounded-xl shrink-0 overflow-hidden flex flex-col w-full lg:w-[45%] h-auto lg:h-[calc(100vh-140px)] lg:sticky lg:top-[100px]"
             >
               {/* Drawer Header */}
               <div className="p-5 border-b border-neutral-150 bg-neutral-50/50 flex items-center justify-between">
@@ -600,7 +629,7 @@ export default function MembersModule({ currentUser, token, settings }: MembersM
                       </div>
                     ) : (
                       <div className="border border-neutral-200 rounded-lg bg-neutral-50/30 overflow-hidden">
-                        <table className="w-full text-left text-[11px] border-collapse">
+                        <div className="overflow-x-auto"><table className="w-full text-left text-[11px] border-collapse">
                           <thead>
                             <tr className="bg-neutral-100/80 text-neutral-500 text-[9px] font-bold border-b border-neutral-150 uppercase tracking-wider">
                               <th className="p-2 w-16">Date</th>
@@ -636,7 +665,7 @@ export default function MembersModule({ currentUser, token, settings }: MembersM
                               );
                             })}
                           </tbody>
-                        </table>
+                        </table></div>
                       </div>
                     )}
                   </div>
@@ -820,8 +849,17 @@ export default function MembersModule({ currentUser, token, settings }: MembersM
                         <div className="grid grid-cols-2 gap-2">
                           <div>
                             <label className="block text-[10px] uppercase font-bold text-neutral-400 mb-1">Employee ID <span className="text-red-400">*</span></label>
-                            <input type="text" className="w-full text-xs border border-neutral-200 rounded-md p-2 bg-white focus:outline-none focus:ring-1 focus:ring-neutral-400 text-neutral-800 font-mono"
-                              value={employeeId} onChange={e => setEmployeeId(e.target.value)} required placeholder="EMP-1234" />
+                            <div className="flex gap-1">
+                              <input type="text" className="flex-1 min-w-0 text-xs border border-neutral-200 rounded-md p-2 bg-white focus:outline-none focus:ring-1 focus:ring-neutral-400 text-neutral-800 font-mono"
+                                value={employeeId} onChange={e => setEmployeeId(e.target.value)} required placeholder="EMP-1234" />
+                              {!employeeId && (
+                                <button type="button"
+                                  onClick={() => setEmployeeId('EMP-' + Math.floor(100000 + Math.random() * 900000))}
+                                  className="shrink-0 text-[10px] px-2 py-1 rounded-md bg-neutral-100 hover:bg-neutral-200 text-neutral-600 border border-neutral-200 font-medium transition-colors">
+                                  Generate
+                                </button>
+                              )}
+                            </div>
                           </div>
                           <div>
                             <label className="block text-[10px] uppercase font-bold text-neutral-400 mb-1">Email</label>

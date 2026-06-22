@@ -12,6 +12,8 @@ import {
   RefreshCw,
   Link2,
   UserPlus,
+  Copy,
+  KeyRound,
 } from 'lucide-react';
 
 interface UsersModuleProps {
@@ -66,8 +68,15 @@ export default function UsersModule({ currentUser, token }: UsersModuleProps) {
   const [newEmpName, setNewEmpName] = useState('');
   const [newEmpEmail, setNewEmpEmail] = useState('');
   const [newEmpRole, setNewEmpRole] = useState('Member');
+  const [newEmpPin, setNewEmpPin] = useState('');
   const [isCreating, setIsCreating] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
+  const [createdPinInfo, setCreatedPinInfo] = useState<{ name: string; email: string; pin: string } | null>(null);
+
+  const generatePin = () => {
+    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789';
+    return Array.from({ length: 8 }, () => chars[Math.floor(Math.random() * chars.length)]).join('');
+  };
 
   const rolesList = ['System Admin', 'Manager', 'Accounting Officer', 'Cashier', 'Auditor', 'Member'];
 
@@ -183,18 +192,22 @@ export default function UsersModule({ currentUser, token }: UsersModuleProps) {
   };
 
   const handleAdminCreate = async () => {
-    if (!newEmpName.trim() || !newEmpEmail.trim()) return;
+    if (!newEmpName.trim() || !newEmpEmail.trim() || !newEmpPin.trim()) return;
     setIsCreating(true);
     setCreateError(null);
     try {
       const res = await fetch('/api/users/admin-create', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ displayName: newEmpName.trim(), email: newEmpEmail.trim(), role: newEmpRole }),
+        body: JSON.stringify({ displayName: newEmpName.trim(), email: newEmpEmail.trim(), role: newEmpRole, tempPin: newEmpPin.trim() }),
       });
       if (!res.ok) { const e = await res.json(); throw new Error(e.error || 'Failed to create user.'); }
+      const pinSnapshot = newEmpPin.trim();
+      const nameSnapshot = newEmpName.trim();
+      const emailSnapshot = newEmpEmail.trim();
       setAddEmpModal(false);
-      setNewEmpName(''); setNewEmpEmail(''); setNewEmpRole('Member');
+      setNewEmpName(''); setNewEmpEmail(''); setNewEmpRole('Member'); setNewEmpPin('');
+      setCreatedPinInfo({ name: nameSnapshot, email: emailSnapshot, pin: pinSnapshot });
       await fetchUsers();
     } catch (err: any) {
       setCreateError(err.message);
@@ -234,16 +247,16 @@ export default function UsersModule({ currentUser, token }: UsersModuleProps) {
   const isAdmin = currentUser.role === 'System Admin';
 
   return (
-    <div className="flex-grow p-8 overflow-y-auto h-screen space-y-6">
+    <div className="flex-grow p-4 md:p-8 overflow-y-auto h-screen space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between flex-wrap gap-y-2">
         <div>
           <h1 className="text-xl font-medium tracking-tight text-neutral-900">System User Accounts</h1>
           <p className="text-xs text-neutral-400 mt-1">Review registrations, approve members, and manage staff access privileges.</p>
         </div>
         <div className="flex items-center gap-2">
           {isAdmin && (
-            <button onClick={() => { setAddEmpModal(true); setCreateError(null); }}
+            <button onClick={() => { setAddEmpModal(true); setCreateError(null); setNewEmpPin(generatePin()); }}
               className="flex items-center gap-1.5 bg-neutral-900 hover:bg-neutral-800 text-white text-xs font-semibold py-1.5 px-3 rounded-lg shadow-sm cursor-pointer">
               <UserPlus className="w-3.5 h-3.5" />
               <span>Add Employee</span>
@@ -279,13 +292,13 @@ export default function UsersModule({ currentUser, token }: UsersModuleProps) {
           </div>
           <div className="flex items-center gap-2">
             <select value={statusFilter} onChange={e => setStatusFilter(e.target.value as any)}
-              className="bg-white border border-neutral-200 text-neutral-700 text-sm rounded-lg px-3 py-2 h-9 focus:outline-none focus:ring-1 focus:ring-neutral-300 hover:bg-neutral-50 cursor-pointer">
+              className="flex-1 min-w-0 bg-white border border-neutral-200 text-neutral-700 text-sm rounded-lg px-3 py-2 h-9 focus:outline-none focus:ring-1 focus:ring-neutral-300 hover:bg-neutral-50 cursor-pointer">
               <option value="all">All Statuses</option>
               <option value="pending">Pending Approval</option>
               <option value="active">Active / Approved</option>
             </select>
             <select value={roleFilter} onChange={e => setRoleFilter(e.target.value)}
-              className="bg-white border border-neutral-200 text-neutral-700 text-sm rounded-lg px-3 py-2 h-9 focus:outline-none focus:ring-1 focus:ring-neutral-300 hover:bg-neutral-50 cursor-pointer">
+              className="flex-1 min-w-0 bg-white border border-neutral-200 text-neutral-700 text-sm rounded-lg px-3 py-2 h-9 focus:outline-none focus:ring-1 focus:ring-neutral-300 hover:bg-neutral-50 cursor-pointer">
               <option value="all">All Roles</option>
               {rolesList.map(r => <option key={r} value={r}>{r}</option>)}
             </select>
@@ -305,111 +318,184 @@ export default function UsersModule({ currentUser, token }: UsersModuleProps) {
           <h3 className="text-xs font-semibold text-neutral-800">No matching users found</h3>
         </div>
       ) : (
-        <div className="bg-white border border-neutral-200 rounded-xl overflow-hidden shadow-xl shadow-neutral-200/20">
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs border-collapse">
-              <thead>
-                <tr className="bg-neutral-50 border-b border-neutral-200 text-[10px] uppercase font-bold text-neutral-400">
-                  <th className="py-3 px-6">User</th>
-                  <th className="py-3 px-4">Employee ID</th>
-                  <th className="py-3 px-6">Role</th>
-                  <th className="py-3 px-6">Status</th>
-                  <th className="py-3 px-6">Joined</th>
-                  <th className="py-3 px-6 text-right">Action</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-neutral-100 bg-white">
-                {filteredUsers.map(user => {
-                  const isMe = user.id === currentUser.id;
-                  const isUpdating = updatingUserId === user.id;
-                  const joinDate = new Date(user.createdAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+        <>
+          {/* Mobile cards — visible below md */}
+          <div className="md:hidden space-y-3">
+            {filteredUsers.map(user => {
+              const isMe = user.id === currentUser.id;
+              const isUpdating = updatingUserId === user.id;
+              return (
+                <div key={user.id} className="bg-white border border-neutral-200 rounded-xl p-4 shadow-sm">
+                  <div className="flex items-start gap-3">
+                    <div className="w-10 h-10 rounded-full bg-neutral-100 flex items-center justify-center font-bold text-neutral-600 text-xs border border-neutral-200 uppercase shrink-0">
+                      {user.displayName ? user.displayName.slice(0, 2) : 'US'}
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <span className="text-xs font-semibold text-neutral-900 truncate">{user.displayName || 'Unidentified Profile'}</span>
+                        {isMe && <span className="bg-neutral-900 text-white text-[9px] px-1.5 py-0.5 rounded font-bold uppercase tracking-wide shrink-0">YOU</span>}
+                      </div>
+                      <div className="text-[10px] text-neutral-400 font-mono truncate mt-0.5">{user.email}</div>
+                      {user.pendingEmployeeId && (
+                        <div className="text-[10px] text-neutral-400 font-mono mt-0.5">ID: {user.pendingEmployeeId}</div>
+                      )}
+                      <div className="mt-1.5">{getStatusBadge(user)}</div>
+                    </div>
+                  </div>
 
-                  return (
-                    <tr key={user.id} className="hover:bg-neutral-50/40 transition-colors">
-                      <td className="py-4 px-6">
-                        <div className="flex items-center gap-3">
-                          <div className="w-8 h-8 rounded-full bg-neutral-100 flex items-center justify-center font-bold text-neutral-600 text-xs border border-neutral-200 uppercase shrink-0">
-                            {user.displayName ? user.displayName.slice(0, 2) : 'US'}
+                  <div className="mt-3 pt-3 border-t border-neutral-100 flex items-center justify-between gap-2">
+                    <div className="min-w-0">
+                      {isAdmin && !isMe ? (
+                        <select value={user.role} disabled={isUpdating} onChange={e => handleUpdateRole(user.id, e.target.value)}
+                          className="text-xs bg-neutral-50 text-neutral-800 border border-neutral-200 rounded p-1 font-medium focus:outline-none cursor-pointer">
+                          {rolesList.map(r => <option key={r} value={r}>{r}</option>)}
+                        </select>
+                      ) : (
+                        <span className="text-xs font-semibold text-neutral-600 bg-neutral-100 border border-neutral-200 px-2 py-1 rounded">{user.role}</span>
+                      )}
+                    </div>
+
+                    <div className="shrink-0">
+                      {isUpdating ? (
+                        <Loader className="w-4 h-4 text-neutral-400 animate-spin" />
+                      ) : isMe ? (
+                        <span className="text-[10px] text-neutral-400 italic">Protected</span>
+                      ) : !user.isActive ? (
+                        isAdmin && (
+                          user.pendingEmployeeId ? (
+                            <button onClick={() => handleQuickApprove(user)}
+                              className="flex items-center gap-1 bg-neutral-900 text-white text-[11px] font-semibold py-1.5 px-3 rounded-lg cursor-pointer">
+                              <UserCheck2 className="w-3.5 h-3.5" />
+                              <span>Approve</span>
+                            </button>
+                          ) : (
+                            <button onClick={() => openLinkModal(user)}
+                              className="flex items-center gap-1 border border-neutral-300 text-neutral-700 text-[11px] font-semibold py-1.5 px-3 rounded-lg cursor-pointer">
+                              <Link2 className="w-3.5 h-3.5" />
+                              <span>Link & Approve</span>
+                            </button>
+                          )
+                        )
+                      ) : (
+                        <button onClick={() => handleUpdateStatus(user.id, user.isActive)}
+                          title="Suspends this user's login access."
+                          className="flex items-center gap-1 border border-neutral-200 text-neutral-600 text-[11px] font-semibold py-1.5 px-3 rounded-lg cursor-pointer">
+                          <UserX className="w-3.5 h-3.5" />
+                          <span>Suspend</span>
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Desktop table — visible from md up */}
+          <div className="hidden md:block bg-white border border-neutral-200 rounded-xl overflow-hidden shadow-xl shadow-neutral-200/20">
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-xs border-collapse">
+                <thead>
+                  <tr className="bg-neutral-50 border-b border-neutral-200 text-[10px] uppercase font-bold text-neutral-400">
+                    <th className="py-3 px-6">User</th>
+                    <th className="py-3 px-4 hidden sm:table-cell">Employee ID</th>
+                    <th className="py-3 px-6">Role</th>
+                    <th className="py-3 px-6">Status</th>
+                    <th className="py-3 px-6 hidden md:table-cell">Joined</th>
+                    <th className="py-3 px-6 text-right">Action</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-neutral-100 bg-white">
+                  {filteredUsers.map(user => {
+                    const isMe = user.id === currentUser.id;
+                    const isUpdating = updatingUserId === user.id;
+                    const joinDate = new Date(user.createdAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+
+                    return (
+                      <tr key={user.id} className="hover:bg-neutral-50/40 transition-colors">
+                        <td className="py-4 px-6">
+                          <div className="flex items-center gap-3">
+                            <div className="w-8 h-8 rounded-full bg-neutral-100 flex items-center justify-center font-bold text-neutral-600 text-xs border border-neutral-200 uppercase shrink-0">
+                              {user.displayName ? user.displayName.slice(0, 2) : 'US'}
+                            </div>
+                            <div>
+                              <div className="font-semibold text-neutral-850 flex items-center gap-1.5">
+                                <span>{user.displayName || 'Unidentified Profile'}</span>
+                                {isMe && (
+                                  <span className="bg-neutral-900 text-white text-[9px] px-1.5 py-0.5 rounded font-bold uppercase tracking-wide">YOU</span>
+                                )}
+                              </div>
+                              <div className="text-[10px] text-neutral-400 font-mono mt-0.5">{user.email}</div>
+                            </div>
                           </div>
-                          <div>
-                            <div className="font-semibold text-neutral-850 flex items-center gap-1.5">
-                              <span>{user.displayName || 'Unidentified Profile'}</span>
-                              {isMe && (
-                                <span className="bg-neutral-900 text-white text-[9px] px-1.5 py-0.5 rounded font-bold uppercase tracking-wide">YOU</span>
+                        </td>
+
+                        <td className="py-4 px-4 hidden sm:table-cell">
+                          {user.pendingEmployeeId ? (
+                            <span className="text-[10px] text-neutral-500 font-mono whitespace-nowrap">
+                              {user.pendingEmployeeId}
+                            </span>
+                          ) : (
+                            <span className="text-[10px] text-neutral-300 italic">—</span>
+                          )}
+                        </td>
+
+                        <td className="py-4 px-6">
+                          {isAdmin && !isMe ? (
+                            <select value={user.role} disabled={isUpdating} onChange={e => handleUpdateRole(user.id, e.target.value)}
+                              className="text-xs bg-neutral-50 hover:bg-neutral-100 text-neutral-800 border border-neutral-200 hover:border-neutral-300 rounded p-1 font-medium focus:outline-none cursor-pointer transition-colors">
+                              {rolesList.map(r => <option key={r} value={r}>{r}</option>)}
+                            </select>
+                          ) : (
+                            <span className="inline-flex items-center font-semibold text-neutral-700 bg-neutral-100 border border-neutral-200 px-2 py-1 rounded text-xs h-[30px]">{user.role}</span>
+                          )}
+                        </td>
+
+                        <td className="py-4 px-6">{getStatusBadge(user)}</td>
+
+                        <td className="py-4 px-6 font-mono text-[10px] text-neutral-500 hidden md:table-cell">{joinDate}</td>
+
+                        <td className="py-4 px-6 text-right">
+                          {isUpdating ? (
+                            <Loader className="w-4 h-4 text-neutral-400 animate-spin ml-auto" />
+                          ) : isMe ? (
+                            <span className="text-[10px] text-neutral-400 italic">Protected Seat</span>
+                          ) : !user.isActive ? (
+                            <div className="flex items-center justify-end gap-2">
+                              {isAdmin && (
+                                user.pendingEmployeeId ? (
+                                  <button onClick={() => handleQuickApprove(user)}
+                                    className="flex items-center gap-1 bg-neutral-900 border border-neutral-800 text-white hover:bg-neutral-800 text-[11px] font-semibold py-1 px-3 rounded-md shadow-sm transition-colors cursor-pointer">
+                                    <UserCheck2 className="w-3.5 h-3.5" />
+                                    <span>Approve</span>
+                                  </button>
+                                ) : (
+                                  <button onClick={() => openLinkModal(user)}
+                                    className="flex items-center gap-1 border border-neutral-300 text-neutral-700 hover:bg-neutral-50 text-[11px] font-semibold py-1 px-3 rounded-md transition-colors cursor-pointer">
+                                    <Link2 className="w-3.5 h-3.5" />
+                                    <span>Link & Approve</span>
+                                  </button>
+                                )
                               )}
                             </div>
-                            <div className="text-[10px] text-neutral-400 font-mono mt-0.5">{user.email}</div>
-                          </div>
-                        </div>
-                      </td>
-
-                      <td className="py-4 px-4">
-                        {user.pendingEmployeeId ? (
-                          <span className="text-[10px] text-neutral-500 font-mono whitespace-nowrap">
-                            {user.pendingEmployeeId}
-                          </span>
-                        ) : (
-                          <span className="text-[10px] text-neutral-300 italic">—</span>
-                        )}
-                      </td>
-
-                      <td className="py-4 px-6">
-                        {isAdmin && !isMe ? (
-                          <select value={user.role} disabled={isUpdating} onChange={e => handleUpdateRole(user.id, e.target.value)}
-                            className="text-xs bg-neutral-50 hover:bg-neutral-100 text-neutral-800 border border-neutral-200 hover:border-neutral-300 rounded p-1 font-medium focus:outline-none cursor-pointer transition-colors">
-                            {rolesList.map(r => <option key={r} value={r}>{r}</option>)}
-                          </select>
-                        ) : (
-                          <span className="inline-flex items-center font-semibold text-neutral-700 bg-neutral-100 border border-neutral-200 px-2 py-1 rounded text-xs h-[30px]">{user.role}</span>
-                        )}
-                      </td>
-
-                      <td className="py-4 px-6">{getStatusBadge(user)}</td>
-
-                      <td className="py-4 px-6 font-mono text-[10px] text-neutral-500">{joinDate}</td>
-
-                      <td className="py-4 px-6 text-right">
-                        {isUpdating ? (
-                          <Loader className="w-4 h-4 text-neutral-400 animate-spin ml-auto" />
-                        ) : isMe ? (
-                          <span className="text-[10px] text-neutral-400 italic">Protected Seat</span>
-                        ) : !user.isActive ? (
-                          <div className="flex items-center justify-end gap-2">
-                            {isAdmin && (
-                              user.pendingEmployeeId ? (
-                                // New-style: employee ID already set at registration — one-click approve
-                                <button onClick={() => handleQuickApprove(user)}
-                                  className="flex items-center gap-1 bg-neutral-900 border border-neutral-800 text-white hover:bg-neutral-800 text-[11px] font-semibold py-1 px-3 rounded-md shadow-sm transition-colors cursor-pointer">
-                                  <UserCheck2 className="w-3.5 h-3.5" />
-                                  <span>Approve</span>
-                                </button>
-                              ) : (
-                                // Legacy: no employee ID stored — use modal with dropdown
-                                <button onClick={() => openLinkModal(user)}
-                                  className="flex items-center gap-1 border border-neutral-300 text-neutral-700 hover:bg-neutral-50 text-[11px] font-semibold py-1 px-3 rounded-md transition-colors cursor-pointer">
-                                  <Link2 className="w-3.5 h-3.5" />
-                                  <span>Link & Approve</span>
-                                </button>
-                              )
-                            )}
-                          </div>
-                        ) : (
-                          <button
-                            onClick={() => handleUpdateStatus(user.id, user.isActive)}
-                            title="Suspends this user's login access. They will be blocked from signing into the system until reactivated."
-                            className="flex items-center gap-1 border border-neutral-200 text-neutral-600 hover:bg-red-50 hover:text-red-600 hover:border-red-200 text-[11px] font-semibold py-1 px-3 rounded-md transition-colors cursor-pointer">
-                            <UserX className="w-3.5 h-3.5" />
-                            <span>Suspend</span>
-                          </button>
-                        )}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+                          ) : (
+                            <button
+                              onClick={() => handleUpdateStatus(user.id, user.isActive)}
+                              title="Suspends this user's login access. They will be blocked from signing into the system until reactivated."
+                              className="flex items-center gap-1 border border-neutral-200 text-neutral-600 hover:bg-red-50 hover:text-red-600 hover:border-red-200 text-[11px] font-semibold py-1 px-3 rounded-md transition-colors cursor-pointer">
+                              <UserX className="w-3.5 h-3.5" />
+                              <span>Suspend</span>
+                            </button>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
           </div>
-        </div>
+        </>
       )}
 
       {/* Add Employee Modal */}
@@ -453,8 +539,25 @@ export default function UsersModule({ currentUser, token }: UsersModuleProps) {
                   {rolesList.map(r => <option key={r} value={r}>{r}</option>)}
                 </select>
               </div>
+              <div>
+                <label className="block text-[10px] font-bold uppercase text-neutral-400 mb-1">Temporary Password</label>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    placeholder="e.g. Welcome@2024"
+                    value={newEmpPin}
+                    onChange={e => setNewEmpPin(e.target.value)}
+                    className="flex-1 text-sm font-mono border border-neutral-200 bg-white rounded-lg p-2.5 focus:outline-none focus:ring-1 focus:ring-neutral-900 placeholder:text-neutral-400 tracking-wide"
+                  />
+                  <button type="button" onClick={() => setNewEmpPin(generatePin())}
+                    className="text-xs border border-neutral-200 bg-neutral-50 hover:bg-neutral-100 text-neutral-700 px-3 rounded-lg cursor-pointer transition-colors whitespace-nowrap">
+                    Generate
+                  </button>
+                </div>
+                <p className="text-[10px] text-neutral-400 mt-1">Employee uses this to log in via "Staff Password Login". It will be emailed to them automatically.</p>
+              </div>
               <div className="p-2.5 bg-blue-50 border border-blue-200 text-blue-800 text-[11px] rounded-lg leading-relaxed">
-                The account will be created as <span className="font-semibold">Approved & Active</span> immediately. The person can log in later using this email.
+                The account will be created as <span className="font-semibold">Approved & Active</span> immediately. Credentials will be sent to the employee's email.
               </div>
             </div>
 
@@ -463,12 +566,55 @@ export default function UsersModule({ currentUser, token }: UsersModuleProps) {
                 className="flex-1 border border-neutral-200 text-neutral-700 hover:bg-neutral-50 text-xs font-semibold py-2 rounded-lg cursor-pointer transition-colors">
                 Cancel
               </button>
-              <button onClick={handleAdminCreate} disabled={isCreating || !newEmpName.trim() || !newEmpEmail.trim()}
+              <button onClick={handleAdminCreate} disabled={isCreating || !newEmpName.trim() || !newEmpEmail.trim() || newEmpPin.trim().length < 4}
                 className="flex-1 bg-neutral-900 hover:bg-neutral-800 disabled:bg-neutral-300 text-white text-xs font-semibold py-2 rounded-lg cursor-pointer transition-colors flex items-center justify-center gap-2">
                 {isCreating ? <Loader className="w-3.5 h-3.5 animate-spin" /> : <UserPlus className="w-3.5 h-3.5" />}
                 {isCreating ? 'Creating...' : 'Create Account'}
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* PIN Created Success Dialog */}
+      {createdPinInfo && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4" onClick={() => setCreatedPinInfo(null)}>
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6 space-y-4" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-emerald-50 border border-emerald-200 flex items-center justify-center shrink-0">
+                <KeyRound className="w-5 h-5 text-emerald-600" />
+              </div>
+              <div>
+                <h2 className="text-sm font-semibold text-neutral-900">Account Created</h2>
+                <p className="text-xs text-neutral-500">Share the PIN below with the employee securely.</p>
+              </div>
+            </div>
+
+            <div className="bg-neutral-50 border border-neutral-200 rounded-xl p-4 space-y-1.5">
+              <div className="text-[10px] font-bold uppercase text-neutral-400 tracking-widest">Employee</div>
+              <div className="text-sm font-semibold text-neutral-900">{createdPinInfo.name}</div>
+              <div className="text-xs text-neutral-500 font-mono">{createdPinInfo.email}</div>
+            </div>
+
+            <div className="bg-neutral-900 rounded-xl p-4 text-center">
+              <div className="text-[10px] font-bold uppercase tracking-widest text-neutral-400 mb-2">Temporary Password</div>
+              <div className="text-3xl font-mono font-bold text-white tracking-[0.3em]">{createdPinInfo.pin}</div>
+              <button
+                onClick={() => navigator.clipboard.writeText(createdPinInfo.pin)}
+                className="mt-3 inline-flex items-center gap-1.5 text-[11px] text-neutral-400 hover:text-white transition-colors cursor-pointer"
+              >
+                <Copy className="w-3 h-3" /> Copy Password
+              </button>
+            </div>
+
+            <p className="text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 leading-relaxed">
+              This password has been emailed to the employee. They must use it to log in via <strong>Staff Password Login</strong> on the login screen.
+            </p>
+
+            <button onClick={() => setCreatedPinInfo(null)}
+              className="w-full bg-neutral-900 hover:bg-neutral-800 text-white text-xs font-semibold py-2.5 rounded-lg cursor-pointer transition-colors">
+              Done
+            </button>
           </div>
         </div>
       )}

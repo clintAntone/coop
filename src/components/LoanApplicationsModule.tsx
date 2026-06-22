@@ -95,9 +95,9 @@ export default function LoanApplicationsModule({ currentUser, token, settings }:
   const fmt = (cents: number) => `${settings.currencySymbol}${(cents / 100).toLocaleString('en-US', { minimumFractionDigits: 2 })}`;
 
   return (
-    <div className="flex-grow p-8 overflow-y-auto h-screen space-y-6">
+    <div className="flex-grow p-4 md:p-8 overflow-y-auto h-screen space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between flex-wrap gap-y-2">
         <div>
           <h1 className="text-xl font-medium tracking-tight text-neutral-900">Loan Applications</h1>
           <p className="text-xs text-neutral-400 mt-1">Review and process member loan requests.</p>
@@ -137,15 +137,15 @@ export default function LoanApplicationsModule({ currentUser, token, settings }:
         </div>
       ) : (
         <div className="bg-white border border-neutral-200 rounded-xl overflow-hidden shadow-xl shadow-neutral-200/20">
-          <table className="w-full text-left text-xs border-collapse">
+          <div className="overflow-x-auto"><table className="w-full text-left text-xs border-collapse">
             <thead>
               <tr className="bg-neutral-50 border-b border-neutral-200 text-[10px] uppercase font-bold text-neutral-400">
                 <th className="py-3 px-6">Member</th>
                 <th className="py-3 px-4">Loan Product</th>
                 <th className="py-3 px-4">Amount</th>
-                <th className="py-3 px-4">Term</th>
+                <th className="py-3 px-4 hidden md:table-cell">Term</th>
                 <th className="py-3 px-4">Status</th>
-                <th className="py-3 px-4">Applied</th>
+                <th className="py-3 px-4 hidden md:table-cell">Applied</th>
                 <th className="py-3 px-4 text-right">Action</th>
               </tr>
             </thead>
@@ -174,9 +174,9 @@ export default function LoanApplicationsModule({ currentUser, token, settings }:
                       </td>
                       <td className="py-4 px-4 text-neutral-600">{loanApp.loanProductName || '—'}</td>
                       <td className="py-4 px-4 font-semibold text-neutral-900 font-mono">{fmt(loanApp.requestedAmountCents)}</td>
-                      <td className="py-4 px-4 text-neutral-600">{loanApp.termMonths} mo.</td>
+                      <td className="py-4 px-4 text-neutral-600 hidden md:table-cell">{loanApp.termMonths} mo.</td>
                       <td className="py-4 px-4">{statusBadge(loanApp.status)}</td>
-                      <td className="py-4 px-4 text-[10px] text-neutral-500 font-mono">{appliedDate}</td>
+                      <td className="py-4 px-4 text-[10px] text-neutral-500 font-mono hidden md:table-cell">{appliedDate}</td>
                       <td className="py-4 px-4 text-right">
                         <div className="flex items-center justify-end gap-2">
                           <button onClick={() => setExpandedId(isExpanded ? null : loanApp.id)}
@@ -229,7 +229,7 @@ export default function LoanApplicationsModule({ currentUser, token, settings }:
                 );
               })}
             </tbody>
-          </table>
+          </table></div>
         </div>
       )}
 

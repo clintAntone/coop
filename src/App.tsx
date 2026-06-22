@@ -12,7 +12,7 @@ import UsersModule from './components/UsersModule.tsx';
 import ProfileModule from './components/ProfileModule.tsx';
 import SettingsModule from './components/SettingsModule.tsx';
 import LoanApplicationsModule from './components/LoanApplicationsModule.tsx';
-import { AlertTriangle, KeyRound, Loader, ShieldCheck } from 'lucide-react';
+import { AlertTriangle, KeyRound, Loader, ShieldCheck, Menu } from 'lucide-react';
 
 export default function App() {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
@@ -21,6 +21,7 @@ export default function App() {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<string>('members');
   const [mountedTabs, setMountedTabs] = useState<Set<string>>(new Set(['members']));
+  const [sidebarOpen, setSidebarOpen] = useState(false);
 
   const navigateTo = (tab: string) => {
     setMountedTabs(prev => new Set([...prev, tab]));
@@ -248,6 +249,15 @@ export default function App() {
     }
   };
 
+  const handlePinLogin = (token: string, user: User) => {
+    setCurrentUser(user);
+    setAuthToken(token);
+    localStorage.setItem('coop_authToken', token);
+    localStorage.setItem('coop_currentUser', JSON.stringify(user));
+    if (user.role === 'Member') navigateTo('portal');
+    else navigateTo('members');
+  };
+
   const handleLogout = async () => {
     setIsLoading(true);
     try {
@@ -321,6 +331,7 @@ export default function App() {
     return (
       <AuthScreen
         onMockLogin={handleMockLogin}
+        onPinLogin={handlePinLogin}
         isLoading={isLoading}
         errorMsg={errorMessage}
         settings={settings}
@@ -364,10 +375,33 @@ export default function App() {
         onRoleSwap={handleRoleSeatSwap}
         settings={settings}
         onSettingsUpdated={setSettings}
+        isOpen={sidebarOpen}
+        onClose={() => setSidebarOpen(false)}
       />
 
       {/* Main viewport area */}
       <main className="flex-grow flex flex-col bg-neutral-50 relative h-screen overflow-hidden">
+        {/* Mobile top bar — visible below lg breakpoint */}
+        <div className="lg:hidden fixed top-0 left-0 right-0 z-30 h-14 bg-gradient-to-r from-neutral-950 to-neutral-900 flex items-center px-3 gap-2.5 border-b border-neutral-800 shadow-md">
+          <button
+            onClick={() => setSidebarOpen(true)}
+            className="p-1.5 text-neutral-400 hover:text-white transition-colors shrink-0"
+            aria-label="Open menu"
+          >
+            <Menu className="w-5 h-5" />
+          </button>
+          <div className="w-7 h-7 rounded-full bg-white flex items-center justify-center font-bold text-neutral-900 text-[10px] shadow overflow-hidden shrink-0">
+            {settings.logoUrl
+              ? <img src={settings.logoUrl} alt="Logo" className="w-full h-full object-contain" />
+              : settings.appName.slice(0, 2).toUpperCase()
+            }
+          </div>
+          <div className="min-w-0 flex-1">
+            <p className="text-sm font-semibold text-white truncate leading-tight">{settings.appName}</p>
+            {settings.motto && <p className="text-[9px] text-neutral-500 truncate italic">{settings.motto}</p>}
+          </div>
+        </div>
+        <div className="pt-14 lg:pt-0" />
         {errorMessage && (
           <div className="bg-amber-50 border-b border-amber-200 px-6 py-2 text-xs flex items-center justify-between text-amber-800">
             <span className="flex items-center gap-2">

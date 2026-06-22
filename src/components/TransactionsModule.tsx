@@ -196,14 +196,14 @@ export default function TransactionsModule({ currentUser, token, settings }: Tra
   });
 
   return (
-    <div className="flex-grow p-8 overflow-y-auto h-screen">
+    <div className="flex-grow p-4 md:p-8 overflow-y-auto h-screen">
       {/* Top Controls */}
-      <div className="flex items-center justify-between mb-8">
-        <div>
+      <div className="flex items-start justify-between gap-3 mb-6 md:mb-8">
+        <div className="min-w-0">
           <h1 className="text-xl font-medium tracking-tight text-neutral-900 font-sans">
             Postings & Journal Logs
           </h1>
-          <p className="text-xs text-neutral-400 mt-1">
+          <p className="text-xs text-neutral-400 mt-1 hidden sm:block">
             Review detailed financial transaction logs, search references, or post new double-entry activities.
           </p>
         </div>
@@ -211,10 +211,11 @@ export default function TransactionsModule({ currentUser, token, settings }: Tra
         {['System Admin', 'Manager', 'Accounting Officer', 'Cashier'].includes(currentUser.role) && (
           <button
             onClick={handleOpenPosting}
-            className="flex items-center gap-2 bg-neutral-900 hover:bg-neutral-800 text-white text-xs font-semibold py-2 px-4 rounded-lg shadow-sm transition-all cursor-pointer"
+            className="shrink-0 flex items-center gap-1.5 bg-neutral-900 hover:bg-neutral-800 text-white text-xs font-semibold py-2 px-3 rounded-lg shadow-sm transition-all cursor-pointer"
           >
-            <Plus className="w-3.5 h-3.5 animate-pulse" />
-            <span>Post New Transaction</span>
+            <Plus className="w-3.5 h-3.5" />
+            <span className="hidden sm:inline">Post New Transaction</span>
+            <span className="sm:hidden">Post</span>
           </button>
         )}
       </div>
@@ -222,12 +223,12 @@ export default function TransactionsModule({ currentUser, token, settings }: Tra
       {/* Main Ledger Sheet */}
       <div className="bg-white border border-neutral-200/80 rounded-xl shadow-xl shadow-neutral-200/20 overflow-hidden">
         {/* Filtering bar */}
-        <div className="p-4 border-b border-neutral-150 bg-neutral-50/40 flex items-center justify-between">
-          <div className="relative w-full max-w-sm">
+        <div className="p-4 border-b border-neutral-150 bg-neutral-50/40 flex items-center gap-3">
+          <div className="relative flex-grow min-w-0">
             <Search className="absolute left-3 top-2.5 w-4 h-4 text-neutral-400 shrink-0" />
             <input
               type="text"
-              placeholder="Search by member, employee ID, reference or type..."
+              placeholder="Search member, reference..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               className="w-full text-xs pl-9 pr-4 py-2 border border-neutral-200 rounded-lg bg-white focus:outline-none focus:ring-1 focus:ring-neutral-400 focus:border-neutral-400 text-neutral-800 placeholder-neutral-400"
@@ -242,8 +243,9 @@ export default function TransactionsModule({ currentUser, token, settings }: Tra
             >
               <RefreshCw className="w-3.5 h-3.5 text-neutral-500" />
             </button>
-            <span className="text-[10px] text-neutral-400 font-medium font-mono uppercase bg-neutral-150 border border-neutral-200 shadow-sm rounded-md px-2 py-1">
-              Active ledger sheet
+            <span className="inline-flex items-center gap-1.5 text-[10px] text-neutral-400 font-medium">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 shrink-0" />
+              Live
             </span>
           </div>
         </div>
@@ -263,100 +265,119 @@ export default function TransactionsModule({ currentUser, token, settings }: Tra
             </p>
           </div>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse table-auto text-xs">
-              <thead>
-                <tr className="bg-neutral-50 text-neutral-500 text-[10px] uppercase font-semibold border-b border-neutral-150">
-                  <th className="py-3 px-4 w-32">Date & Reference</th>
-                  <th className="py-3 px-4">Member Name</th>
-                  <th className="py-3 px-4">Transaction Type</th>
-                  <th className="py-3 px-4 w-52">Description Memo</th>
-                  <th className="py-3 px-4 text-right">Amount</th>
-                  <th className="py-3 px-4 text-center w-28">Status</th>
-                  {['System Admin', 'Manager', 'Accounting Officer'].includes(currentUser.role) && (
-                    <th className="py-3 px-4 w-24 text-right">Actions</th>
-                  )}
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-neutral-150">
-                {filteredTxns.map((txn) => {
-                  const date = new Date(txn.createdAt).toLocaleString(undefined, {
-                    month: 'short',
-                    day: 'numeric',
-                    hour: '2-digit',
-                    minute: '2-digit'
-                  });
-                  const isReversed = txn.status === 'reversed';
-                  return (
-                    <tr
-                      key={txn.id}
-                      className={`hover:bg-neutral-50/50 transition-colors ${
-                        isReversed ? 'bg-red-50/20 text-neutral-400' : ''
-                      }`}
-                    >
-                      <td className="py-3 px-4 space-y-1">
-                        <div className="font-mono text-[9px] text-neutral-400">{date}</div>
-                        <div className="font-mono font-semibold text-neutral-800 text-[10px]">
-                          {txn.referenceNumber}
-                        </div>
-                      </td>
-                      <td className="py-3 px-4">
-                        <div className="font-semibold text-neutral-900">{txn.memberName}</div>
-                        <div className="font-mono text-[9px] text-neutral-400">ID: {txn.employeeId}</div>
-                      </td>
-                      <td className="py-3 px-4 font-sans font-medium">
-                        {txn.transactionType === 'deposit' && (
-                          <span className="text-emerald-700">Savings Deposit</span>
-                        )}
-                        {txn.transactionType === 'withdrawal' && (
-                          <span className="text-amber-800">Savings Withdrawal</span>
-                        )}
-                        {txn.transactionType === 'share_capital_contribution' && (
-                          <span className="text-blue-700">Share Capital Posting</span>
-                        )}
-                        {txn.transactionType === 'manual_adjustment' && (
-                          <span className="text-neutral-500 font-mono text-[10px]">Adjusting ledger</span>
-                        )}
-                        {txn.transactionType === 'reversal' && (
-                          <span className="text-red-700 uppercase font-mono text-[9px]">Reversing entry</span>
-                        )}
-                      </td>
-                      <td className="py-3 px-4 text-neutral-500 leading-relaxed max-w-xs truncate" title={txn.description || ''}>
-                        {txn.description || '—'}
-                        <div className="text-[9px] text-neutral-400 font-medium">Posted by: {txn.creatorName || 'System'}</div>
-                      </td>
-                      <td className="py-3 px-4 text-right font-mono font-medium text-neutral-950">
-                        {settings.currencySymbol}{(txn.amount / 100).toLocaleString('en-US', { minimumFractionDigits: 2 })}
-                      </td>
-                      <td className="py-3 px-4 text-center">
-                        <span
-                          className={`inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold ${
-                            isReversed
-                              ? 'bg-red-50 text-red-500 border border-red-200 line-through'
-                              : 'bg-emerald-50 text-emerald-700 border border-emerald-100'
-                          }`}
-                        >
-                          {isReversed ? 'Reversed' : 'Completed'}
-                        </span>
-                      </td>
-                      {['System Admin', 'Manager', 'Accounting Officer'].includes(currentUser.role) && (
-                        <td className="py-3 px-4 text-right">
-                          {!isReversed && txn.transactionType !== 'reversal' && (
-                            <button
-                              onClick={() => setReversalTarget(txn)}
-                              className="text-[11px] text-red-500 hover:text-red-700 hover:underline font-semibold cursor-pointer"
-                            >
-                              Reverse
-                            </button>
+          <>
+            {/* Mobile cards */}
+            <div className="md:hidden divide-y divide-neutral-100">
+              {filteredTxns.map((txn) => {
+                const date = new Date(txn.createdAt).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+                const isReversed = txn.status === 'reversed';
+                const canReverse = ['System Admin', 'Manager', 'Accounting Officer'].includes(currentUser.role) && !isReversed && txn.transactionType !== 'reversal';
+                return (
+                  <div key={txn.id} className={`px-4 py-3.5 ${isReversed ? 'bg-red-50/30' : ''}`}>
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="text-xs font-semibold text-neutral-900 truncate">{txn.memberName || '—'}</span>
+                          {isReversed && (
+                            <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold shrink-0 bg-red-50 text-red-500 border border-red-200">
+                              Reversed
+                            </span>
                           )}
+                        </div>
+                        <div className="text-[10px] text-neutral-400 font-mono mt-0.5">{txn.employeeId}</div>
+                        <div className="flex items-center gap-2 mt-1.5 flex-wrap">
+                          <span className="text-[10px] font-semibold">
+                            {txn.transactionType === 'deposit' && <span className="text-emerald-700">Savings Deposit</span>}
+                            {txn.transactionType === 'withdrawal' && <span className="text-amber-700">Savings Withdrawal</span>}
+                            {txn.transactionType === 'share_capital_contribution' && <span className="text-blue-700">Share Capital</span>}
+                            {txn.transactionType === 'manual_adjustment' && <span className="text-neutral-500">Manual Adjustment</span>}
+                            {txn.transactionType === 'reversal' && <span className="text-red-600">Reversing Entry</span>}
+                          </span>
+                          <span className="text-[9px] text-neutral-400 font-mono">{date}</span>
+                        </div>
+                        <div className="text-[9px] text-neutral-400 font-mono mt-0.5">{txn.referenceNumber}</div>
+                      </div>
+                      <div className="shrink-0 text-right">
+                        <div className="text-sm font-mono font-semibold text-neutral-900">
+                          {settings.currencySymbol}{(txn.amount / 100).toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                        </div>
+                        {canReverse && (
+                          <button onClick={() => setReversalTarget(txn)} className="text-[11px] text-red-500 font-semibold mt-1 cursor-pointer">
+                            Reverse
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Desktop table */}
+            <div className="hidden md:block overflow-x-auto">
+              <table className="w-full text-left border-collapse table-auto text-xs">
+                <thead>
+                  <tr className="bg-neutral-50 text-neutral-500 text-[10px] uppercase font-semibold border-b border-neutral-150">
+                    <th className="py-3 px-4 w-32">Date & Reference</th>
+                    <th className="py-3 px-4">Member Name</th>
+                    <th className="py-3 px-4">Transaction Type</th>
+                    <th className="py-3 px-4 w-52">Description Memo</th>
+                    <th className="py-3 px-4 text-right">Amount</th>
+                    <th className="py-3 px-4 text-center w-28">Status</th>
+                    {['System Admin', 'Manager', 'Accounting Officer'].includes(currentUser.role) && (
+                      <th className="py-3 px-4 w-24 text-right">Actions</th>
+                    )}
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-neutral-150">
+                  {filteredTxns.map((txn) => {
+                    const date = new Date(txn.createdAt).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+                    const isReversed = txn.status === 'reversed';
+                    return (
+                      <tr key={txn.id} className={`hover:bg-neutral-50/50 transition-colors ${isReversed ? 'bg-red-50/20 text-neutral-400' : ''}`}>
+                        <td className="py-3 px-4 space-y-1">
+                          <div className="font-mono text-[9px] text-neutral-400">{date}</div>
+                          <div className="font-mono font-semibold text-neutral-800 text-[10px]">{txn.referenceNumber}</div>
                         </td>
-                      )}
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
+                        <td className="py-3 px-4">
+                          <div className="font-semibold text-neutral-900">{txn.memberName}</div>
+                          <div className="font-mono text-[9px] text-neutral-400">ID: {txn.employeeId}</div>
+                        </td>
+                        <td className="py-3 px-4 font-sans font-medium">
+                          {txn.transactionType === 'deposit' && <span className="text-emerald-700">Savings Deposit</span>}
+                          {txn.transactionType === 'withdrawal' && <span className="text-amber-800">Savings Withdrawal</span>}
+                          {txn.transactionType === 'share_capital_contribution' && <span className="text-blue-700">Share Capital Posting</span>}
+                          {txn.transactionType === 'manual_adjustment' && <span className="text-neutral-500 font-mono text-[10px]">Adjusting ledger</span>}
+                          {txn.transactionType === 'reversal' && <span className="text-red-700 uppercase font-mono text-[9px]">Reversing entry</span>}
+                        </td>
+                        <td className="py-3 px-4 text-neutral-500 leading-relaxed max-w-xs truncate" title={txn.description || ''}>
+                          {txn.description || '—'}
+                          <div className="text-[9px] text-neutral-400 font-medium">Posted by: {txn.creatorName || 'System'}</div>
+                        </td>
+                        <td className="py-3 px-4 text-right font-mono font-medium text-neutral-950">
+                          {settings.currencySymbol}{(txn.amount / 100).toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                        </td>
+                        <td className="py-3 px-4 text-center">
+                          <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold ${isReversed ? 'bg-red-50 text-red-500 border border-red-200 line-through' : 'bg-emerald-50 text-emerald-700 border border-emerald-100'}`}>
+                            {isReversed ? 'Reversed' : 'Completed'}
+                          </span>
+                        </td>
+                        {['System Admin', 'Manager', 'Accounting Officer'].includes(currentUser.role) && (
+                          <td className="py-3 px-4 text-right">
+                            {!isReversed && txn.transactionType !== 'reversal' && (
+                              <button onClick={() => setReversalTarget(txn)} className="text-[11px] text-red-500 hover:text-red-700 hover:underline font-semibold cursor-pointer">
+                                Reverse
+                              </button>
+                            )}
+                          </td>
+                        )}
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </>
         )}
       </div>
 
@@ -432,10 +453,10 @@ export default function TransactionsModule({ currentUser, token, settings }: Tra
                                   : 'hover:bg-neutral-50 text-neutral-800'
                               }`}
                             >
-                              <span className="font-semibold">{m.firstName} {m.lastName}</span>
-                              <span className={`ml-2 font-mono text-[11px] ${selectedMemberId === String(m.id) ? 'text-neutral-300' : 'text-neutral-400'}`}>
+                              <div className="font-semibold truncate">{m.firstName} {m.lastName}</div>
+                              <div className={`font-mono text-[10px] mt-0.5 ${selectedMemberId === String(m.id) ? 'text-neutral-300' : 'text-neutral-400'}`}>
                                 {m.employeeId}
-                              </span>
+                              </div>
                             </button>
                           ));
                         })()}
@@ -552,9 +573,9 @@ export default function TransactionsModule({ currentUser, token, settings }: Tra
                   <button
                     type="submit"
                     disabled={posting}
-                    className="flex items-center gap-1.5 bg-neutral-900 hover:bg-neutral-800 disabled:bg-neutral-300 text-white text-xs font-semibold py-2 px-4 rounded-md shadow-sm transition-all cursor-pointer"
+                    className="flex items-center gap-1.5 bg-neutral-900 hover:bg-neutral-800 disabled:bg-neutral-300 text-white text-xs font-semibold py-2 px-4 rounded-md shadow-sm transition-all cursor-pointer whitespace-nowrap"
                   >
-                    {posting ? 'Balancing Ledger lines...' : 'Commit Transaction'}
+                    {posting ? 'Posting...' : 'Commit Transaction'}
                   </button>
                 </div>
               </form>

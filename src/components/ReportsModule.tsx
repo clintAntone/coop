@@ -96,20 +96,20 @@ export default function ReportsModule({ currentUser, token, settings }: ReportsM
   });
 
   return (
-    <div className="flex-grow p-8 overflow-y-auto h-screen">
+    <div className="flex-grow p-4 md:p-8 overflow-y-auto h-screen">
       {/* Top Title Section */}
-      <div className="flex items-center justify-between mb-8">
+      <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4 mb-6 lg:mb-8">
         <div>
           <h1 className="text-xl font-medium tracking-tight text-neutral-900 font-sans">
             Financial Intelligence & Audits
           </h1>
-          <p className="text-xs text-neutral-400 mt-1">
+          <p className="text-xs text-neutral-400 mt-1 hidden sm:block">
             Real-time dual balance reports, subsidiary ledgers audit trails, and security trace entries.
           </p>
         </div>
 
         {/* Tab Selector Links */}
-        <div className="flex items-center gap-1.5 bg-neutral-100 p-1 rounded-lg border border-neutral-200">
+        <div className="flex items-center gap-1 bg-neutral-100 p-1 rounded-lg border border-neutral-200 overflow-x-auto shrink-0">
           <button
             onClick={() => setActiveSubTab('trial')}
             className={`flex items-center gap-2 px-3 py-1.5 text-xs font-semibold rounded-md transition-all cursor-pointer ${
@@ -209,60 +209,106 @@ export default function ReportsModule({ currentUser, token, settings }: ReportsM
                     <RefreshCw className="w-3.5 h-3.5" />
                   </button>
                 </div>
-                <table className="w-full text-left text-xs border-collapse">
-                  <thead>
-                    <tr className="bg-neutral-50 text-neutral-500 text-[10px] uppercase font-semibold border-b border-neutral-150">
-                      <th className="py-3 px-4 w-28">COA Account Code</th>
-                      <th className="py-3 px-4">Account Label</th>
-                      <th className="py-3 px-4">Normal Balance</th>
-                      <th className="py-3 px-4 text-right">Gross Debits</th>
-                      <th className="py-3 px-4 text-right">Gross Credits</th>
-                      <th className="py-3 px-4 text-right w-36">Net Trial Debit</th>
-                      <th className="py-3 px-4 text-right w-36">Net Trial Credit</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-neutral-150 bg-white">
-                    {trialBalanceList.map((coa) => (
-                      <tr key={coa.code} className="hover:bg-neutral-50/50 transition-colors">
-                        <td className="py-2.5 px-4 font-mono font-bold text-neutral-500 text-[10px]">
-                          {coa.code}
+                {/* Mobile cards — visible below md */}
+                <div className="md:hidden divide-y divide-neutral-150">
+                  {trialBalanceList.map((coa) => (
+                    <div key={coa.code} className="p-4 space-y-2">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="font-mono font-bold text-neutral-500 text-[10px]">{coa.code}</span>
+                        <span className="text-[9px] uppercase font-semibold px-1.5 py-0.5 bg-neutral-100 text-neutral-500 rounded">
+                          {coa.type}
+                        </span>
+                      </div>
+                      <div className="font-semibold text-neutral-800 text-xs">{coa.name}</div>
+                      <div className="grid grid-cols-2 gap-2 pt-1">
+                        <div>
+                          <div className="text-[9px] uppercase text-neutral-400 font-semibold mb-0.5">Debits</div>
+                          <div className="font-mono text-[11px] text-neutral-500">
+                            {settings.currencySymbol}{(coa.debitSum / 100).toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                          </div>
+                        </div>
+                        <div>
+                          <div className="text-[9px] uppercase text-neutral-400 font-semibold mb-0.5">Credits</div>
+                          <div className="font-mono text-[11px] text-neutral-500">
+                            {settings.currencySymbol}{(coa.creditSum / 100).toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                          </div>
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-2 gap-2 pt-1 border-t border-neutral-100">
+                        <div>
+                          <div className="text-[9px] uppercase text-neutral-400 font-semibold mb-0.5">Net Debit</div>
+                          <div className="font-mono text-[11px] font-bold text-neutral-900">
+                            {coa.debit > 0 ? `${settings.currencySymbol}${(coa.debit / 100).toLocaleString('en-US', { minimumFractionDigits: 2 })}` : '—'}
+                          </div>
+                        </div>
+                        <div>
+                          <div className="text-[9px] uppercase text-neutral-400 font-semibold mb-0.5">Net Credit</div>
+                          <div className="font-mono text-[11px] font-bold text-neutral-950">
+                            {coa.credit > 0 ? `${settings.currencySymbol}${(coa.credit / 100).toLocaleString('en-US', { minimumFractionDigits: 2 })}` : '—'}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Desktop table — hidden on mobile */}
+                <div className="hidden md:block">
+                  <table className="w-full text-left text-xs border-collapse">
+                    <thead>
+                      <tr className="bg-neutral-50 text-neutral-500 text-[10px] uppercase font-semibold border-b border-neutral-150">
+                        <th className="py-3 px-4 w-28">COA Account Code</th>
+                        <th className="py-3 px-4">Account Label</th>
+                        <th className="py-3 px-4">Normal Balance</th>
+                        <th className="py-3 px-4 text-right">Gross Debits</th>
+                        <th className="py-3 px-4 text-right">Gross Credits</th>
+                        <th className="py-3 px-4 text-right w-36">Net Trial Debit</th>
+                        <th className="py-3 px-4 text-right w-36">Net Trial Credit</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-neutral-150 bg-white">
+                      {trialBalanceList.map((coa) => (
+                        <tr key={coa.code} className="hover:bg-neutral-50/50 transition-colors">
+                          <td className="py-2.5 px-4 font-mono font-bold text-neutral-500 text-[10px]">
+                            {coa.code}
+                          </td>
+                          <td className="py-2.5 px-4">
+                            <div className="font-semibold text-neutral-800">{coa.name}</div>
+                            <div className="text-[9px] uppercase text-neutral-400 font-semibold">{coa.type}</div>
+                          </td>
+                          <td className="py-2.5 px-4 font-mono text-[10px] text-neutral-400 uppercase">
+                            {coa.normalBalance}
+                          </td>
+                          <td className="py-2.5 px-4 text-right font-mono text-neutral-500 text-[11px]">
+                            {settings.currencySymbol}{(coa.debitSum / 100).toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                          </td>
+                          <td className="py-2.5 px-4 text-right font-mono text-neutral-500 text-[11px]">
+                            {settings.currencySymbol}{(coa.creditSum / 100).toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                          </td>
+                          <td className="py-2.5 px-4 text-right font-mono font-bold text-neutral-900 text-[11px] bg-neutral-50/10">
+                            {coa.debit > 0 ? `${settings.currencySymbol}${(coa.debit / 100).toLocaleString('en-US', { minimumFractionDigits: 2 })}` : '—'}
+                          </td>
+                          <td className="py-2.5 px-4 text-right font-mono font-bold text-neutral-950 text-[11px] bg-neutral-50/15 border-l border-neutral-100">
+                            {coa.credit > 0 ? `${settings.currencySymbol}${(coa.credit / 100).toLocaleString('en-US', { minimumFractionDigits: 2 })}` : '—'}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                    <tfoot>
+                      <tr className="bg-neutral-900 text-white font-mono font-bold text-[11px] border-t-2 border-neutral-900">
+                        <td colSpan={5} className="py-3 px-4 text-right uppercase tracking-wider text-[10px]">
+                          Balanced Ledger Grand Sum:
                         </td>
-                        <td className="py-2.5 px-4">
-                          <div className="font-semibold text-neutral-800">{coa.name}</div>
-                          <div className="text-[9px] uppercase text-neutral-400 font-semibold">{coa.type}</div>
+                        <td className="py-3 px-4 text-right">
+                          {settings.currencySymbol}{(totalDebitSum / 100).toLocaleString('en-US', { minimumFractionDigits: 2 })}
                         </td>
-                        <td className="py-2.5 px-4 font-mono text-[10px] text-neutral-400 uppercase">
-                          {coa.normalBalance}
-                        </td>
-                        <td className="py-2.5 px-4 text-right font-mono text-neutral-500 text-[11px]">
-                          {settings.currencySymbol}{(coa.debitSum / 100).toLocaleString('en-US', { minimumFractionDigits: 2 })}
-                        </td>
-                        <td className="py-2.5 px-4 text-right font-mono text-neutral-500 text-[11px]">
-                          {settings.currencySymbol}{(coa.creditSum / 100).toLocaleString('en-US', { minimumFractionDigits: 2 })}
-                        </td>
-                        <td className="py-2.5 px-4 text-right font-mono font-bold text-neutral-900 text-[11px] bg-neutral-50/10">
-                          {coa.debit > 0 ? `${settings.currencySymbol}${(coa.debit / 100).toLocaleString('en-US', { minimumFractionDigits: 2 })}` : '—'}
-                        </td>
-                        <td className="py-2.5 px-4 text-right font-mono font-bold text-neutral-950 text-[11px] bg-neutral-50/15 border-l border-neutral-100">
-                          {coa.credit > 0 ? `${settings.currencySymbol}${(coa.credit / 100).toLocaleString('en-US', { minimumFractionDigits: 2 })}` : '—'}
+                        <td className="py-3 px-4 text-right border-l border-neutral-700">
+                          {settings.currencySymbol}{(totalCreditSum / 100).toLocaleString('en-US', { minimumFractionDigits: 2 })}
                         </td>
                       </tr>
-                    ))}
-                  </tbody>
-                  <tfoot>
-                    <tr className="bg-neutral-900 text-white font-mono font-bold text-[11px] border-t-2 border-neutral-900">
-                      <td colSpan={5} className="py-3 px-4 text-right uppercase tracking-wider text-[10px]">
-                        Balanced Ledger Grand Sum:
-                      </td>
-                      <td className="py-3 px-4 text-right">
-                        {settings.currencySymbol}{(totalDebitSum / 100).toLocaleString('en-US', { minimumFractionDigits: 2 })}
-                      </td>
-                      <td className="py-3 px-4 text-right border-l border-neutral-700">
-                        {settings.currencySymbol}{(totalCreditSum / 100).toLocaleString('en-US', { minimumFractionDigits: 2 })}
-                      </td>
-                    </tr>
-                  </tfoot>
-                </table>
+                    </tfoot>
+                  </table>
+                </div>
               </div>
             </div>
           )}
@@ -271,7 +317,7 @@ export default function ReportsModule({ currentUser, token, settings }: ReportsM
           {activeSubTab === 'members' && (
             <div className="space-y-8">
               {/* Aggregate Capital charts */}
-              <div className="grid grid-cols-3 gap-6 items-start">
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 lg:gap-6 items-start">
                 {/* Aggregate Numeric Summary */}
                 <div className="bg-white border border-neutral-200/80 rounded-xl p-5 shadow-sm space-y-4">
                   <h3 className="text-[10px] font-bold text-neutral-400 uppercase tracking-widest flex items-center gap-1">
@@ -329,39 +375,80 @@ export default function ReportsModule({ currentUser, token, settings }: ReportsM
                     />
                   </div>
                 </div>
-                <table className="w-full text-left text-xs border-collapse">
-                  <thead>
-                    <tr className="bg-neutral-50 text-neutral-500 text-[10px] uppercase font-semibold border-b border-neutral-150">
-                      <th className="py-2.5 px-4 w-28">Employee ID</th>
-                      <th className="py-2.5 px-4">Member Name</th>
-                      <th className="py-2.5 px-4">Department</th>
-                      <th className="py-2.5 px-4 text-right">Savings Ledger (2010)</th>
-                      <th className="py-2.5 px-4 text-right">Share Capital (3010)</th>
-                      <th className="py-2.5 px-4 text-right w-40 bg-neutral-50/10">Summary Balances</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-neutral-150 bg-white">
-                    {filteredMembers.map(m => {
-                      const netSummary = m.savings + m.shareCapital;
-                      return (
-                        <tr key={m.id} className="hover:bg-neutral-50/50 transition-colors">
-                          <td className="py-2.5 px-4 font-mono text-neutral-500 text-[10px]">{m.employeeId}</td>
-                          <td className="py-2.5 px-4 font-semibold text-neutral-800">{m.firstName} {m.lastName}</td>
-                          <td className="py-2.5 px-4 text-neutral-500">{m.department || '—'}</td>
-                          <td className="py-2.5 px-4 text-right font-mono font-medium text-neutral-900">
-                            {settings.currencySymbol}{(m.savings / 100).toLocaleString('en-US', { minimumFractionDigits: 2 })}
-                          </td>
-                          <td className="py-2.5 px-4 text-right font-mono font-medium text-neutral-900 border-r border-neutral-100">
-                            {settings.currencySymbol}{(m.shareCapital / 100).toLocaleString('en-US', { minimumFractionDigits: 2 })}
-                          </td>
-                          <td className="py-2.5 px-4 text-right font-mono font-bold text-neutral-950 bg-neutral-50/10">
-                            {settings.currencySymbol}{(netSummary / 100).toLocaleString('en-US', { minimumFractionDigits: 2 })}
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
+                {/* Mobile cards — visible below md */}
+                <div className="md:hidden divide-y divide-neutral-150">
+                  {filteredMembers.map(m => {
+                    const netSummary = m.savings + m.shareCapital;
+                    return (
+                      <div key={m.id} className="p-4 space-y-2">
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="font-semibold text-neutral-800 text-xs">{m.firstName} {m.lastName}</span>
+                          <span className="font-mono text-[10px] text-neutral-400">{m.employeeId}</span>
+                        </div>
+                        {m.department && (
+                          <div className="text-[10px] text-neutral-500 uppercase font-semibold">{m.department}</div>
+                        )}
+                        <div className="grid grid-cols-3 gap-2 pt-1">
+                          <div>
+                            <div className="text-[9px] uppercase text-neutral-400 font-semibold mb-0.5">Savings (2010)</div>
+                            <div className="font-mono text-[11px] font-medium text-neutral-900">
+                              {settings.currencySymbol}{(m.savings / 100).toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                            </div>
+                          </div>
+                          <div>
+                            <div className="text-[9px] uppercase text-neutral-400 font-semibold mb-0.5">Share Capital (3010)</div>
+                            <div className="font-mono text-[11px] font-medium text-neutral-900">
+                              {settings.currencySymbol}{(m.shareCapital / 100).toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                            </div>
+                          </div>
+                          <div>
+                            <div className="text-[9px] uppercase text-neutral-400 font-semibold mb-0.5">Total</div>
+                            <div className="font-mono text-[11px] font-bold text-neutral-950">
+                              {settings.currencySymbol}{(netSummary / 100).toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {/* Desktop table — hidden on mobile */}
+                <div className="hidden md:block">
+                  <table className="w-full text-left text-xs border-collapse">
+                    <thead>
+                      <tr className="bg-neutral-50 text-neutral-500 text-[10px] uppercase font-semibold border-b border-neutral-150">
+                        <th className="py-2.5 px-4 w-28">Employee ID</th>
+                        <th className="py-2.5 px-4">Member Name</th>
+                        <th className="py-2.5 px-4">Department</th>
+                        <th className="py-2.5 px-4 text-right">Savings Ledger (2010)</th>
+                        <th className="py-2.5 px-4 text-right">Share Capital (3010)</th>
+                        <th className="py-2.5 px-4 text-right w-40 bg-neutral-50/10">Summary Balances</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-neutral-150 bg-white">
+                      {filteredMembers.map(m => {
+                        const netSummary = m.savings + m.shareCapital;
+                        return (
+                          <tr key={m.id} className="hover:bg-neutral-50/50 transition-colors">
+                            <td className="py-2.5 px-4 font-mono text-neutral-500 text-[10px]">{m.employeeId}</td>
+                            <td className="py-2.5 px-4 font-semibold text-neutral-800">{m.firstName} {m.lastName}</td>
+                            <td className="py-2.5 px-4 text-neutral-500">{m.department || '—'}</td>
+                            <td className="py-2.5 px-4 text-right font-mono font-medium text-neutral-900">
+                              {settings.currencySymbol}{(m.savings / 100).toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                            </td>
+                            <td className="py-2.5 px-4 text-right font-mono font-medium text-neutral-900 border-r border-neutral-100">
+                              {settings.currencySymbol}{(m.shareCapital / 100).toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                            </td>
+                            <td className="py-2.5 px-4 text-right font-mono font-bold text-neutral-950 bg-neutral-50/10">
+                              {settings.currencySymbol}{(netSummary / 100).toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
               </div>
             </div>
           )}
@@ -391,26 +478,46 @@ export default function ReportsModule({ currentUser, token, settings }: ReportsM
                         second: '2-digit'
                       });
                       return (
-                        <div key={log.id} className="p-4 flex items-start gap-4 hover:bg-neutral-50/30 transition-colors text-xs">
-                          {/* Left Column: DateTime */}
-                          <div className="w-36 font-mono text-[9px] text-neutral-400 pt-0.5 shrink-0">
-                            {dateStr}
-                          </div>
-
-                          {/* Middle Column: details */}
-                          <div className="flex-grow space-y-1">
+                        <div key={log.id} className="hover:bg-neutral-50/30 transition-colors text-xs">
+                          {/* Mobile layout: stacked card — hidden on md+ */}
+                          <div className="md:hidden p-4 space-y-2">
                             <div className="font-semibold text-neutral-800 uppercase font-mono text-[10px] tracking-wide">
                               {log.action}
                             </div>
                             <p className="text-neutral-500 leading-relaxed text-[11px]">
                               {log.details || '—'}
                             </p>
+                            <div className="flex items-center justify-between pt-1 gap-2">
+                              <span className="font-mono text-[9px] text-neutral-400">{dateStr}</span>
+                              <div className="text-right">
+                                <div className="font-semibold text-neutral-900 text-[11px]">{log.userName || 'System Seat'}</div>
+                                <div className="font-mono text-[9px] text-neutral-400 truncate">{log.userEmail}</div>
+                              </div>
+                            </div>
                           </div>
 
-                          {/* Right Column: Actor */}
-                          <div className="w-48 text-right shrink-0">
-                            <div className="font-semibold text-neutral-900">{log.userName || 'System Seat'}</div>
-                            <div className="font-mono text-[9px] text-neutral-400 truncate">{log.userEmail}</div>
+                          {/* Desktop layout: side-by-side — hidden on mobile */}
+                          <div className="hidden md:flex items-start gap-4 p-4">
+                            {/* Left Column: DateTime */}
+                            <div className="w-36 font-mono text-[9px] text-neutral-400 pt-0.5 shrink-0">
+                              {dateStr}
+                            </div>
+
+                            {/* Middle Column: details */}
+                            <div className="flex-grow space-y-1">
+                              <div className="font-semibold text-neutral-800 uppercase font-mono text-[10px] tracking-wide">
+                                {log.action}
+                              </div>
+                              <p className="text-neutral-500 leading-relaxed text-[11px]">
+                                {log.details || '—'}
+                              </p>
+                            </div>
+
+                            {/* Right Column: Actor */}
+                            <div className="w-48 text-right shrink-0">
+                              <div className="font-semibold text-neutral-900">{log.userName || 'System Seat'}</div>
+                              <div className="font-mono text-[9px] text-neutral-400 truncate">{log.userEmail}</div>
+                            </div>
                           </div>
                         </div>
                       );

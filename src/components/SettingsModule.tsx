@@ -57,10 +57,30 @@ const NAV: { group: string; items: { id: SectionId; label: string }[] }[] = [
 export default function SettingsModule({ currentUser, token, onSettingsUpdated, settings }: Props) {
   const [section, setSection] = useState<SectionId>('branding');
 
+  const allItems = NAV.flatMap(g => g.items.map(i => ({ ...i, group: g.group })));
+  const currentLabel = allItems.find(i => i.id === section);
+
   return (
-    <div className="flex-grow flex h-screen overflow-hidden">
-      {/* Left nav */}
-      <aside className="w-52 shrink-0 border-r border-neutral-200 bg-white flex flex-col py-6 px-3 overflow-y-auto">
+    <div className="flex-grow flex flex-col lg:flex-row h-screen overflow-hidden">
+      {/* Mobile: section picker dropdown */}
+      <div className="lg:hidden shrink-0 border-b border-neutral-200 bg-white px-4 py-3">
+        <select
+          value={section}
+          onChange={e => setSection(e.target.value as SectionId)}
+          className="w-full text-sm border border-neutral-200 bg-white rounded-lg px-3 py-2.5 focus:outline-none focus:ring-1 focus:ring-neutral-900 cursor-pointer"
+        >
+          {NAV.map(group => (
+            <optgroup key={group.group} label={group.group}>
+              {group.items.map(item => (
+                <option key={item.id} value={item.id}>{item.label}</option>
+              ))}
+            </optgroup>
+          ))}
+        </select>
+      </div>
+
+      {/* Desktop: Left nav */}
+      <aside className="hidden lg:flex w-52 shrink-0 border-r border-neutral-200 bg-white flex-col py-6 px-3 overflow-y-auto">
         <p className="text-[10px] font-bold uppercase tracking-widest text-neutral-400 px-2 mb-4">Settings</p>
         {NAV.map(group => (
           <div key={group.group} className="mb-6">
@@ -83,8 +103,8 @@ export default function SettingsModule({ currentUser, token, onSettingsUpdated, 
       </aside>
 
       {/* Content pane */}
-      <main className="flex-grow overflow-y-auto p-8 max-w-3xl">
-        <div className="bg-white border border-neutral-200 rounded-xl shadow-sm p-6">
+      <main className="flex-grow overflow-y-auto p-4 lg:p-8 lg:max-w-3xl">
+        <div className="bg-white border border-neutral-200 rounded-xl shadow-sm p-4 lg:p-6">
           {section === 'branding' && (
             <SettingsGeneral token={token} settings={settings} onSettingsUpdated={onSettingsUpdated} />
           )}

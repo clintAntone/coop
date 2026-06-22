@@ -27,20 +27,40 @@ interface SidebarProps {
   onRoleSwap: (role: string) => void;
   settings: AppSettings;
   onSettingsUpdated?: (s: AppSettings) => void;
+  isOpen: boolean;
+  onClose: () => void;
 }
 
-export default function Sidebar({ currentUser, activeTab, setActiveTab, onLogout, onRoleSwap, settings }: SidebarProps) {
+export default function Sidebar({ currentUser, activeTab, setActiveTab, onLogout, onRoleSwap, settings, isOpen, onClose }: SidebarProps) {
   const rolesList = ['System Admin', 'Manager', 'Accounting Officer', 'Cashier', 'Auditor', 'Member'];
   const [showCoopInfo, setShowCoopInfo] = useState(false);
 
+  const navigate = (tab: string) => {
+    setActiveTab(tab);
+    onClose();
+  };
+
   return (
     <>
-      <aside className="w-56 bg-neutral-900 text-neutral-300 flex flex-col h-screen shrink-0 border-r border-neutral-800">
+      {/* Mobile backdrop overlay */}
+      {isOpen && (
+        <div
+          className="fixed inset-0 z-40 bg-black/50 lg:hidden"
+          onClick={onClose}
+        />
+      )}
+
+      <aside className={`
+        fixed inset-y-0 left-0 z-50 w-64 bg-neutral-900 text-neutral-300 flex flex-col h-screen shrink-0 border-r border-neutral-800
+        transition-transform duration-300 ease-in-out
+        ${isOpen ? 'translate-x-0' : '-translate-x-full'}
+        lg:relative lg:translate-x-0 lg:w-56
+      `}>
 
         {/* Brand Header — clickable, distinct background */}
         <button
-          onClick={() => setShowCoopInfo(true)}
-          className="w-full px-3 py-3 flex items-center gap-3 bg-neutral-950 hover:bg-neutral-800/70 transition-colors cursor-pointer border-b border-neutral-800 group"
+          onClick={() => { setShowCoopInfo(true); onClose(); }}
+          className="w-full px-3 py-3 hidden lg:flex items-center gap-3 bg-neutral-950 hover:bg-neutral-800/70 transition-colors cursor-pointer border-b border-neutral-800 group"
         >
           <div className="w-11 h-11 rounded-xl bg-white flex items-center justify-center font-bold text-neutral-900 text-sm shadow-lg overflow-hidden shrink-0 group-hover:shadow-xl transition-shadow">
             {settings.logoUrl
@@ -58,7 +78,7 @@ export default function Sidebar({ currentUser, activeTab, setActiveTab, onLogout
 
         {/* User row — clickable to profile */}
         <button
-          onClick={() => setActiveTab('profile')}
+          onClick={() => navigate('profile')}
           className={`w-full px-4 py-3 flex items-center gap-3 transition-colors cursor-pointer text-left group border-b border-neutral-800 ${
             activeTab === 'profile' ? 'bg-neutral-800/60' : 'hover:bg-neutral-800/40'
           }`}
@@ -82,21 +102,21 @@ export default function Sidebar({ currentUser, activeTab, setActiveTab, onLogout
           <div className="text-[9px] font-bold text-neutral-600 uppercase tracking-widest pl-3 mb-2">Operations</div>
 
           {currentUser.role !== 'Member' && (
-            <button onClick={() => setActiveTab('members')}
+            <button onClick={() => navigate('members')}
               className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-xs font-medium tracking-wide transition-all cursor-pointer ${activeTab === 'members' ? 'bg-white text-neutral-900 shadow font-semibold' : 'text-neutral-400 hover:text-neutral-100 hover:bg-neutral-850'}`}>
               <Users className="w-4 h-4 shrink-0" /><span>Members Module</span>
             </button>
           )}
 
           {currentUser.role !== 'Member' && (
-            <button onClick={() => setActiveTab('transactions')}
+            <button onClick={() => navigate('transactions')}
               className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-xs font-medium tracking-wide transition-all cursor-pointer ${activeTab === 'transactions' ? 'bg-white text-neutral-900 shadow font-semibold' : 'text-neutral-400 hover:text-neutral-100 hover:bg-neutral-850'}`}>
               <DollarSign className="w-4 h-4 shrink-0" /><span>Posting Ledger</span>
             </button>
           )}
 
           {currentUser.role !== 'Member' && (
-            <button onClick={() => setActiveTab('loans')}
+            <button onClick={() => navigate('loans')}
               className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-xs font-medium tracking-wide transition-all cursor-pointer ${activeTab === 'loans' ? 'bg-white text-neutral-900 shadow font-semibold' : 'text-neutral-400 hover:text-neutral-100 hover:bg-neutral-850'}`}>
               <HandCoins className="w-4 h-4 shrink-0" /><span>Loan Applications</span>
             </button>
@@ -105,14 +125,14 @@ export default function Sidebar({ currentUser, activeTab, setActiveTab, onLogout
           <div className="text-[9px] font-bold text-neutral-600 uppercase tracking-widest pl-3 mt-4 mb-2">Intelligence</div>
 
           {currentUser.role !== 'Member' && (
-            <button onClick={() => setActiveTab('reports')}
+            <button onClick={() => navigate('reports')}
               className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-xs font-medium tracking-wide transition-all cursor-pointer ${activeTab === 'reports' ? 'bg-white text-neutral-900 shadow font-semibold' : 'text-neutral-400 hover:text-neutral-100 hover:bg-neutral-850'}`}>
               <LineChart className="w-4 h-4 shrink-0" /><span>Financial & Audits</span>
             </button>
           )}
 
           {currentUser.role === 'Member' && (
-            <button onClick={() => setActiveTab('portal')}
+            <button onClick={() => navigate('portal')}
               className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-xs font-medium tracking-wide transition-all cursor-pointer ${activeTab === 'portal' ? 'bg-white text-neutral-900 shadow font-semibold' : 'text-neutral-400 hover:text-neutral-100 hover:bg-neutral-850'}`}>
               <FileText className="w-4 h-4 shrink-0" /><span>My Self Service</span>
             </button>
@@ -121,12 +141,12 @@ export default function Sidebar({ currentUser, activeTab, setActiveTab, onLogout
           {(currentUser.role === 'System Admin' || currentUser.role === 'Manager') && (
             <>
               <div className="text-[9px] font-bold text-neutral-600 uppercase tracking-widest pl-3 mt-4 mb-2">Administration</div>
-              <button onClick={() => setActiveTab('users')}
+              <button onClick={() => navigate('users')}
                 className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-xs font-medium tracking-wide transition-all cursor-pointer ${activeTab === 'users' ? 'bg-white text-neutral-900 shadow font-semibold' : 'text-neutral-400 hover:text-neutral-100 hover:bg-neutral-850'}`}>
                 <Shield className="w-4 h-4 shrink-0" /><span>User Accounts</span>
               </button>
               {currentUser.role === 'System Admin' && (
-                <button onClick={() => setActiveTab('settings')}
+                <button onClick={() => navigate('settings')}
                   className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-xs font-medium tracking-wide transition-all cursor-pointer ${activeTab === 'settings' ? 'bg-white text-neutral-900 shadow font-semibold' : 'text-neutral-400 hover:text-neutral-100 hover:bg-neutral-850'}`}>
                   <Settings className="w-4 h-4 shrink-0" /><span>System Settings</span>
                 </button>
@@ -142,7 +162,7 @@ export default function Sidebar({ currentUser, activeTab, setActiveTab, onLogout
           <button
             onClick={() => { if (window.confirm('Are you sure you want to exit the system?')) onLogout(); }}
             className="flex items-center gap-2 text-xs font-medium text-neutral-500 hover:text-red-400 transition-colors w-full cursor-pointer pl-3 py-1">
-            <LogOut className="w-4 h-4 shrink-0" /><span>Exit Systems</span>
+            <LogOut className="w-4 h-4 shrink-0" /><span>Logout</span>
           </button>
         </div>
       </aside>

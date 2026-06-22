@@ -2,6 +2,9 @@ import { Request, Response, NextFunction } from 'express';
 import { createClient } from '@supabase/supabase-js';
 import { createRemoteJWKSet, jwtVerify } from 'jose';
 import { getOrCreateUser, DBUser } from '../db/users-helper.ts';
+import { db } from '../db/index.ts';
+import { users } from '../db/schema.ts';
+import { eq } from 'drizzle-orm';
 
 export interface AuthRequest extends Request {
   supabaseUser?: any;
@@ -57,6 +60,24 @@ export const requireAuth = async (
   }
 
   const token = authHeader.split('Bearer ')[1];
+
+  // 0. PIN token — for manually-created employee accounts
+  if (token.startsWith('pin-token-')) {
+    try {
+      const parts = token.replace('pin-token-', '').split('|');
+      const uid = parts[0];
+      const found = await db.select().from(users).where(eq(users.uid, uid)).limit(1);
+      if (!found.length) return res.status(401).json({ error: 'Invalid PIN token.' });
+      const u = found[0];
+      if (!u.isActive && req.path !== '/api/me') {
+        return res.status(403).json({ error: 'Account suspended.' });
+      }
+      req.dbUser = u as DBUser;
+      return next();
+    } catch (err: any) {
+      return res.status(401).json({ error: 'PIN token validation failed.' });
+    }
+  }
 
   // 1. Mock mode bypass
   if (token.startsWith('mock-token-')) {

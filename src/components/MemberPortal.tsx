@@ -174,9 +174,9 @@ export default function MemberPortal({ currentUser, token, settings }: MemberPor
   const balances = memberDetails.balances;
 
   return (
-    <div className="flex-grow p-8 overflow-y-auto h-screen print:p-0">
+    <div className="flex-grow p-4 md:p-8 overflow-y-auto h-screen print:p-0">
       {/* Top Banner */}
-      <div className="flex items-center justify-between mb-8 print:hidden">
+      <div className="flex items-center justify-between flex-wrap gap-y-2 mb-8 print:hidden">
         <div>
           <h1 className="text-xl font-medium tracking-tight text-neutral-900 font-sans">
             My Cooperative Account
@@ -222,7 +222,7 @@ export default function MemberPortal({ currentUser, token, settings }: MemberPor
 
       <div className="space-y-8">
         {/* Balances Board */}
-        <div className="grid grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 lg:gap-6">
           {/* Savings balance Card */}
           <div className="bg-neutral-900 text-white rounded-xl p-5 shadow-lg border border-neutral-950 flex flex-col justify-between">
             <div className="flex items-center justify-between">
@@ -290,7 +290,7 @@ export default function MemberPortal({ currentUser, token, settings }: MemberPor
               <p className="text-[11px] text-neutral-400">Once your capital deposits are posted, line statements will populate here.</p>
             </div>
           ) : (
-            <table className="w-full text-left text-xs border-collapse">
+            <div className="overflow-x-auto"><table className="w-full text-left text-xs border-collapse">
               <thead>
                 <tr className="bg-neutral-50 text-neutral-500 text-[10px] uppercase font-semibold border-b border-neutral-150 print:bg-neutral-100">
                   <th className="py-2.5 px-4 w-28">Date</th>
@@ -338,7 +338,7 @@ export default function MemberPortal({ currentUser, token, settings }: MemberPor
                   );
                 })}
               </tbody>
-            </table>
+            </table></div>
           )}
         </div>
 
@@ -435,7 +435,7 @@ export default function MemberPortal({ currentUser, token, settings }: MemberPor
             </div>
           ) : (
             <div className="bg-white border border-neutral-200 rounded-xl overflow-hidden shadow-sm">
-              <table className="w-full text-left text-xs border-collapse">
+              <div className="overflow-x-auto"><table className="w-full text-left text-xs border-collapse">
                 <thead>
                   <tr className="bg-neutral-50 border-b border-neutral-200 text-[10px] uppercase font-bold text-neutral-400">
                     <th className="py-2.5 px-4">Product</th>
@@ -481,7 +481,7 @@ export default function MemberPortal({ currentUser, token, settings }: MemberPor
                     );
                   })}
                 </tbody>
-              </table>
+              </table></div>
             </div>
           )}
         </div>

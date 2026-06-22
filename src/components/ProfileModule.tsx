@@ -174,9 +174,9 @@ export default function ProfileModule({ currentUser, token, settings, onProfileU
             </button>
           </div>
 
-          <div>
-            <p className="text-sm font-semibold text-neutral-900">{currentUser.email}</p>
-            <p className="text-[11px] text-neutral-400 mb-2">{currentUser.role}</p>
+          <div className="min-w-0">
+            <p className="text-sm font-semibold text-neutral-900 break-all leading-snug">{currentUser.email}</p>
+            <p className="text-[11px] text-neutral-400 mb-2 mt-0.5">{currentUser.role}</p>
             <div className="flex items-center gap-2">
               <input
                 ref={fileInputRef}
