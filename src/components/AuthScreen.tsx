@@ -34,6 +34,7 @@ export default function AuthScreen({ onMockLogin, onPinLogin, isLoading, errorMs
   const [changeConfirmPw, setChangeConfirmPw] = useState('');
   const [changePwLoading, setChangePwLoading] = useState(false);
   const [changePwError, setChangePwError] = useState<string | null>(null);
+  const [registrationSuccess, setRegistrationSuccess] = useState<{ name: string } | null>(null);
 
   // Employee ID validation state (registration only)
   const [employeeId, setEmployeeId] = useState('');
@@ -106,7 +107,7 @@ export default function AuthScreen({ onMockLogin, onPinLogin, isLoading, errorMs
         } catch (preErr: any) {
           console.warn('Pre-register stub failed:', preErr.message);
         }
-        alert(`Registration submitted! Your account as ${empIdFullName} is pending approval by a System Admin.`);
+        setRegistrationSuccess({ name: empIdFullName });
         setIsRegistering(false);
         setEmployeeId('');
         setEmpIdStatus('idle');
@@ -312,11 +313,17 @@ export default function AuthScreen({ onMockLogin, onPinLogin, isLoading, errorMs
               <input
                 type="password"
                 className="w-full text-xs p-2.5 border border-neutral-200 bg-white rounded-lg focus:outline-none focus:ring-1 focus:ring-black text-neutral-850"
-                placeholder="Password (minimum 6 characters)"
+                placeholder="Password"
                 value={password}
                 onChange={e => setPassword(e.target.value)}
                 required
               />
+              {isRegistering && password.length > 0 && (
+                <div className={`text-[10px] flex items-center gap-1.5 ${password.length >= 6 ? 'text-emerald-600' : 'text-amber-600'}`}>
+                  <span>{password.length >= 6 ? '✓' : '○'}</span>
+                  <span>Minimum 6 characters {password.length >= 6 ? '— looks good' : `(${6 - password.length} more needed)`}</span>
+                </div>
+              )}
             </div>
 
             <button
@@ -338,10 +345,12 @@ export default function AuthScreen({ onMockLogin, onPinLogin, isLoading, errorMs
 
         </div>
 
-        <div className="bg-neutral-50 border-t border-neutral-100 px-6 py-4 flex items-center justify-between text-[10px] text-neutral-400">
-          <span>Development - HC Koop</span>
-          <span className="font-mono text-[9px]">v1.0.0 (PostgreSQL Mode)</span>
-        </div>
+        {import.meta.env.DEV && (
+          <div className="bg-neutral-50 border-t border-neutral-100 px-6 py-4 flex items-center justify-between text-[10px] text-neutral-400">
+            <span>Development - HC Koop</span>
+            <span className="font-mono text-[9px]">v1.0.0 (PostgreSQL Mode)</span>
+          </div>
+        )}
 
         {showChangePassword && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
@@ -393,6 +402,29 @@ export default function AuthScreen({ onMockLogin, onPinLogin, isLoading, errorMs
           </div>
         )}
       </motion.div>
+
+      {/* Registration Success Modal */}
+      {registrationSuccess && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6 space-y-4">
+            <div className="flex items-start gap-3">
+              <div className="p-2 bg-emerald-50 rounded-full shrink-0">
+                <CheckCircle className="w-5 h-5 text-emerald-600" />
+              </div>
+              <div>
+                <h2 className="text-sm font-semibold text-neutral-900">Registration Submitted!</h2>
+                <p className="text-xs text-neutral-500 mt-1 leading-relaxed">
+                  Your account as <span className="font-semibold text-neutral-700">{registrationSuccess.name}</span> is now pending approval by a System Admin. You'll be able to log in once approved.
+                </p>
+              </div>
+            </div>
+            <button onClick={() => setRegistrationSuccess(null)}
+              className="w-full bg-neutral-900 hover:bg-neutral-800 text-white text-xs font-semibold py-2.5 rounded-lg cursor-pointer transition-colors">
+              Got it
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

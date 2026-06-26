@@ -499,18 +499,18 @@ export default function MembersModule({ currentUser, token, settings }: MembersM
           )}
         </div>
 
-        {/* Member Drawer Panel (Slide out side panel / bento grid) */}
+        {/* Member Drawer Panel — fixed overlay on mobile, sticky side panel on desktop */}
         <AnimatePresence>
           {activeDrawerMember && (
             <motion.div
-              initial={{ opacity: 0, x: 24 }}
-              animate={{ opacity: 1, x: 0 }}
-              exit={{ opacity: 0, x: 24 }}
+              initial={{ opacity: 0, y: 40 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: 40 }}
               transition={{ type: 'spring', damping: 25, stiffness: 200 }}
-              className="bg-white border border-neutral-200 shadow-2xl rounded-xl shrink-0 overflow-hidden flex flex-col w-full lg:w-[45%] h-auto lg:h-[calc(100vh-140px)] lg:sticky lg:top-[100px]"
+              className="fixed inset-0 z-40 bg-white flex flex-col lg:static lg:inset-auto lg:z-auto lg:rounded-xl lg:border lg:border-neutral-200 lg:shadow-2xl lg:shrink-0 lg:overflow-hidden lg:w-[45%] lg:h-[calc(100vh-140px)] lg:sticky lg:top-[100px]"
             >
               {/* Drawer Header */}
-              <div className="p-5 border-b border-neutral-150 bg-neutral-50/50 flex items-center justify-between">
+              <div className="p-4 lg:p-5 border-b border-neutral-150 bg-neutral-50/50 flex items-center justify-between">
                 <div>
                   <h2 className="text-sm font-semibold text-neutral-950 font-sans">
                     Member Ledger Account
@@ -521,9 +521,10 @@ export default function MembersModule({ currentUser, token, settings }: MembersM
                 </div>
                 <button
                   onClick={() => setActiveDrawerMember(null)}
-                  className="p-1 rounded-full hover:bg-neutral-200 text-neutral-400 hover:text-black transition-colors cursor-pointer"
+                  className="flex items-center gap-1.5 lg:gap-0 text-xs font-medium text-neutral-500 hover:text-black lg:text-transparent lg:p-1 lg:rounded-full lg:hover:bg-neutral-200 transition-colors cursor-pointer"
                 >
-                  <X className="w-4 h-4 text-neutral-500" />
+                  <X className="w-4 h-4" />
+                  <span className="lg:hidden">Back</span>
                 </button>
               </div>
 
@@ -888,10 +889,16 @@ export default function MembersModule({ currentUser, token, settings }: MembersM
                       </div>
                     </div>
                     <div className="space-y-1">
-                      <label className="block text-[10px] uppercase font-bold text-neutral-400">Employee ID</label>
-                      <input type="text" className="w-full text-xs border border-neutral-200 rounded-md p-2 bg-white focus:outline-none focus:ring-1 focus:ring-neutral-400 text-neutral-800 font-mono"
+                      <label className="block text-[10px] uppercase font-bold text-neutral-400">
+                        Employee ID
+                        {currentUser.role !== 'System Admin' && (
+                          <span className="ml-1 normal-case font-normal text-neutral-400" title="Only System Admins can change the Employee ID">(locked — contact System Admin)</span>
+                        )}
+                      </label>
+                      <input type="text" className={`w-full text-xs border border-neutral-200 rounded-md p-2 focus:outline-none focus:ring-1 focus:ring-neutral-400 font-mono ${currentUser.role !== 'System Admin' ? 'bg-neutral-100 text-neutral-400 cursor-not-allowed' : 'bg-white text-neutral-800'}`}
                         value={employeeId} onChange={e => setEmployeeId(e.target.value)}
-                        disabled={currentUser.role !== 'System Admin'} required />
+                        disabled={currentUser.role !== 'System Admin'} required
+                        title={currentUser.role !== 'System Admin' ? 'Only System Admins can change the Employee ID' : undefined} />
                     </div>
                     <div className="space-y-1">
                       <label className="block text-[10px] uppercase font-bold text-neutral-400">Enterprise Email Address</label>

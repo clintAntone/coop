@@ -37,10 +37,7 @@ function TermsList({ title, description, endpoint, token }: {
     } finally { setIsLoading(false); }
   };
 
-  const flash = (type: 'success' | 'error', text: string) => {
-    setMsg({ type, text });
-    setTimeout(() => setMsg(null), 3000);
-  };
+  const flash = (type: 'success' | 'error', text: string) => { setMsg({ type, text }); };
 
   const handleAdd = async () => {
     if (!addForm.name.trim()) return;
@@ -104,7 +101,7 @@ function TermsList({ title, description, endpoint, token }: {
         </button>
       </div>
 
-      {msg && <p className={`text-xs font-medium ${msg.type === 'success' ? 'text-emerald-600' : 'text-red-500'}`}>{msg.text}</p>}
+      {msg && <div className={`flex items-center justify-between gap-2 text-xs font-medium px-3 py-2 rounded-lg border ${msg.type === 'success' ? 'text-emerald-700 bg-emerald-50 border-emerald-200' : 'text-red-600 bg-red-50 border-red-200'}`}><span>{msg.text}</span><button type="button" onClick={() => setMsg(null)} className="shrink-0 opacity-60 hover:opacity-100 text-base leading-none cursor-pointer">×</button></div>}
 
       {showAdd && (
         <div className="flex items-center gap-2 p-3 bg-neutral-50 border border-neutral-200 rounded-lg">

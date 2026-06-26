@@ -34,6 +34,7 @@ interface SidebarProps {
 export default function Sidebar({ currentUser, activeTab, setActiveTab, onLogout, onRoleSwap, settings, isOpen, onClose }: SidebarProps) {
   const rolesList = ['System Admin', 'Manager', 'Accounting Officer', 'Cashier', 'Auditor', 'Member'];
   const [showCoopInfo, setShowCoopInfo] = useState(false);
+  const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
 
   const navigate = (tab: string) => {
     setActiveTab(tab);
@@ -52,7 +53,7 @@ export default function Sidebar({ currentUser, activeTab, setActiveTab, onLogout
 
       <aside className={`
         fixed inset-y-0 left-0 z-50 w-64 bg-neutral-900 text-neutral-300 flex flex-col h-screen shrink-0 border-r border-neutral-800
-        transition-transform duration-300 ease-in-out
+        transition-transform duration-300 ease-in-out print:hidden
         ${isOpen ? 'translate-x-0' : '-translate-x-full'}
         lg:relative lg:translate-x-0 lg:w-56
       `}>
@@ -160,7 +161,7 @@ export default function Sidebar({ currentUser, activeTab, setActiveTab, onLogout
         {/* Footer */}
         <div className="p-4 border-t border-neutral-800">
           <button
-            onClick={() => { if (window.confirm('Are you sure you want to exit the system?')) onLogout(); }}
+            onClick={() => setShowLogoutConfirm(true)}
             className="flex items-center gap-2 text-xs font-medium text-neutral-500 hover:text-red-400 transition-colors w-full cursor-pointer pl-3 py-1">
             <LogOut className="w-4 h-4 shrink-0" /><span>Logout</span>
           </button>
@@ -258,6 +259,33 @@ export default function Sidebar({ currentUser, activeTab, setActiveTab, onLogout
                   No cooperative info set yet. Go to System Settings → App Branding to add it.
                 </p>
               )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Logout Confirmation Modal */}
+      {showLogoutConfirm && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-xs p-6 space-y-4">
+            <div className="flex items-start gap-3">
+              <div className="p-2 bg-red-50 rounded-full shrink-0">
+                <LogOut className="w-4 h-4 text-red-500" />
+              </div>
+              <div>
+                <h2 className="text-sm font-semibold text-neutral-900">Exit System?</h2>
+                <p className="text-xs text-neutral-500 mt-1">You will be logged out of the cooperative system.</p>
+              </div>
+            </div>
+            <div className="flex gap-3 pt-1">
+              <button onClick={() => setShowLogoutConfirm(false)}
+                className="flex-1 border border-neutral-200 text-neutral-700 hover:bg-neutral-50 text-xs font-semibold py-2.5 rounded-lg cursor-pointer transition-colors">
+                Stay
+              </button>
+              <button onClick={() => { setShowLogoutConfirm(false); onLogout(); }}
+                className="flex-1 bg-red-500 hover:bg-red-600 text-white text-xs font-semibold py-2.5 rounded-lg cursor-pointer transition-colors">
+                Logout
+              </button>
             </div>
           </div>
         </div>

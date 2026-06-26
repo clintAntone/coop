@@ -19,6 +19,7 @@ import {
   CheckCircle,
   PlusCircle,
   Ban,
+  RefreshCw,
 } from 'lucide-react';
 
 interface MemberPortalProps {
@@ -44,6 +45,7 @@ export default function MemberPortal({ currentUser, token, settings }: MemberPor
   const [loanSubmitting, setLoanSubmitting] = useState(false);
   const [loanError, setLoanError] = useState<string | null>(null);
   const [loanSuccess, setLoanSuccess] = useState(false);
+  const [cancelConfirmId, setCancelConfirmId] = useState<number | null>(null);
 
   useEffect(() => {
     fetchMemberPortalData();
@@ -108,7 +110,15 @@ export default function MemberPortal({ currentUser, token, settings }: MemberPor
     const selectedProduct = loanProducts2.find(p => p.id === parseInt(loanProductId));
     if (!selectedProduct) { setLoanError('Please select a loan product.'); return; }
     const amountCents = Math.round(parseFloat(loanAmount) * 100);
-    if (isNaN(amountCents) || amountCents <= 0) { setLoanError('Enter a valid amount.'); return; }
+    if (isNaN(amountCents) || amountCents <= 0) { setLoanError('Amount must be greater than zero.'); return; }
+    if (selectedProduct && amountCents < selectedProduct.minAmountCents) {
+      setLoanError(`Minimum loan amount is ${settings.currencySymbol}${(selectedProduct.minAmountCents / 100).toLocaleString('en-US', { minimumFractionDigits: 2 })}.`);
+      return;
+    }
+    if (selectedProduct && amountCents > selectedProduct.maxAmountCents) {
+      setLoanError(`Maximum loan amount is ${settings.currencySymbol}${(selectedProduct.maxAmountCents / 100).toLocaleString('en-US', { minimumFractionDigits: 2 })}.`);
+      return;
+    }
     const term = parseInt(loanTerm);
     if (isNaN(term) || term <= 0) { setLoanError('Enter a valid term.'); return; }
     if (!loanPurpose.trim()) { setLoanError('Please describe the purpose.'); return; }
@@ -139,6 +149,7 @@ export default function MemberPortal({ currentUser, token, settings }: MemberPor
       const resApps = await fetch('/api/loan-applications/my', { headers: { Authorization: `Bearer ${token}` } });
       if (resApps.ok) setMyLoanApps(await resApps.json());
     } catch {}
+    setCancelConfirmId(null);
   };
 
   if (isLoading) {
@@ -181,18 +192,18 @@ export default function MemberPortal({ currentUser, token, settings }: MemberPor
           <h1 className="text-xl font-medium tracking-tight text-neutral-900 font-sans">
             My Cooperative Account
           </h1>
-          <p className="text-xs text-neutral-400 mt-1">
-            Welcome back, {memberDetails.firstName}. Monitor savings deposits and capital contributions.
+          <p className="text-xs text-neutral-400 mt-0.5 hidden sm:block">
+            Welcome back, {memberDetails.firstName}.
           </p>
         </div>
 
         <div className="flex items-center gap-2">
           <button
             onClick={fetchMemberPortalData}
-            className="p-1.5 border border-neutral-200 hover:bg-neutral-50 rounded-lg transition-colors cursor-pointer text-xs"
-            title="Refresh values"
+            className="p-1.5 border border-neutral-200 hover:bg-neutral-50 rounded-lg transition-colors cursor-pointer"
+            title="Refresh"
           >
-            Refreshed
+            <RefreshCw className="w-3.5 h-3.5 text-neutral-500" />
           </button>
           <button
             onClick={handlePrint}
@@ -466,7 +477,7 @@ export default function MemberPortal({ currentUser, token, settings }: MemberPor
                         <td className="py-3 px-4 text-neutral-400 font-mono text-[10px]">{new Date(a.createdAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}</td>
                         <td className="py-3 px-4 text-right">
                           {a.status === 'pending' && (
-                            <button onClick={() => handleCancelApp(a.id)}
+                            <button onClick={() => setCancelConfirmId(a.id)}
                               className="flex items-center gap-1 text-[11px] text-neutral-400 hover:text-red-500 cursor-pointer transition-colors">
                               <Ban className="w-3 h-3" />Cancel
                             </button>
@@ -486,6 +497,33 @@ export default function MemberPortal({ currentUser, token, settings }: MemberPor
           )}
         </div>
       </div>
+
+      {/* Cancel Loan Confirmation Modal */}
+      {cancelConfirmId !== null && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6 space-y-4">
+            <div className="flex items-start gap-3">
+              <div className="p-2 bg-red-100 rounded-full shrink-0">
+                <Ban className="w-4 h-4 text-red-500" />
+              </div>
+              <div>
+                <h2 className="text-sm font-semibold text-neutral-900">Cancel Loan Application?</h2>
+                <p className="text-xs text-neutral-500 mt-1 leading-relaxed">This will withdraw your pending loan application. You can re-apply at any time.</p>
+              </div>
+            </div>
+            <div className="flex gap-3 pt-1">
+              <button onClick={() => setCancelConfirmId(null)}
+                className="flex-1 border border-neutral-200 text-neutral-700 hover:bg-neutral-50 text-xs font-semibold py-2.5 rounded-lg cursor-pointer transition-colors">
+                Keep Application
+              </button>
+              <button onClick={() => handleCancelApp(cancelConfirmId)}
+                className="flex-1 bg-red-500 hover:bg-red-600 text-white text-xs font-semibold py-2.5 rounded-lg cursor-pointer transition-colors">
+                Yes, Cancel It
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

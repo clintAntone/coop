@@ -382,7 +382,7 @@ export default function App() {
       {/* Main viewport area */}
       <main className="flex-grow flex flex-col bg-neutral-50 relative h-screen overflow-hidden">
         {/* Mobile top bar — visible below lg breakpoint */}
-        <div className="lg:hidden fixed top-0 left-0 right-0 z-30 h-14 bg-gradient-to-r from-neutral-950 to-neutral-900 flex items-center px-3 gap-2.5 border-b border-neutral-800 shadow-md">
+        <div className="lg:hidden print:hidden fixed top-0 left-0 right-0 z-30 h-14 bg-gradient-to-r from-neutral-950 to-neutral-900 flex items-center px-3 gap-2.5 border-b border-neutral-800 shadow-md">
           <button
             onClick={() => setSidebarOpen(true)}
             className="p-1.5 text-neutral-400 hover:text-white transition-colors shrink-0"

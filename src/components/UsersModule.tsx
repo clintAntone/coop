@@ -72,6 +72,8 @@ export default function UsersModule({ currentUser, token }: UsersModuleProps) {
   const [isCreating, setIsCreating] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
   const [createdPinInfo, setCreatedPinInfo] = useState<{ name: string; email: string; pin: string } | null>(null);
+  const [pinCopied, setPinCopied] = useState(false);
+  const [statusConfirm, setStatusConfirm] = useState<{ userId: number; currentStatus: boolean } | null>(null);
 
   const generatePin = () => {
     const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789';
@@ -156,6 +158,7 @@ export default function UsersModule({ currentUser, token }: UsersModuleProps) {
   };
 
   const handleUpdateStatus = async (userId: number, currentStatus: boolean) => {
+    setStatusConfirm(null);
     setUpdatingUserId(userId);
     try {
       const res = await fetch(`/api/users/${userId}/status`, {
@@ -302,6 +305,12 @@ export default function UsersModule({ currentUser, token }: UsersModuleProps) {
               <option value="all">All Roles</option>
               {rolesList.map(r => <option key={r} value={r}>{r}</option>)}
             </select>
+            {(searchTerm || statusFilter !== 'all' || roleFilter !== 'all') && (
+              <button onClick={() => { setSearchTerm(''); setStatusFilter('all'); setRoleFilter('all'); }}
+                className="shrink-0 text-[11px] text-neutral-500 hover:text-red-500 border border-neutral-200 hover:border-red-200 rounded-lg px-2.5 py-2 h-9 transition-colors cursor-pointer whitespace-nowrap">
+                Clear
+              </button>
+            )}
           </div>
         </div>
       </div>
@@ -377,7 +386,7 @@ export default function UsersModule({ currentUser, token }: UsersModuleProps) {
                           )
                         )
                       ) : (
-                        <button onClick={() => handleUpdateStatus(user.id, user.isActive)}
+                        <button onClick={() => setStatusConfirm({ userId: user.id, currentStatus: user.isActive })}
                           title="Suspends this user's login access."
                           className="flex items-center gap-1 border border-neutral-200 text-neutral-600 text-[11px] font-semibold py-1.5 px-3 rounded-lg cursor-pointer">
                           <UserX className="w-3.5 h-3.5" />
@@ -480,7 +489,7 @@ export default function UsersModule({ currentUser, token }: UsersModuleProps) {
                             </div>
                           ) : (
                             <button
-                              onClick={() => handleUpdateStatus(user.id, user.isActive)}
+                              onClick={() => setStatusConfirm({ userId: user.id, currentStatus: user.isActive })}
                               title="Suspends this user's login access. They will be blocked from signing into the system until reactivated."
                               className="flex items-center gap-1 border border-neutral-200 text-neutral-600 hover:bg-red-50 hover:text-red-600 hover:border-red-200 text-[11px] font-semibold py-1 px-3 rounded-md transition-colors cursor-pointer">
                               <UserX className="w-3.5 h-3.5" />
@@ -554,7 +563,7 @@ export default function UsersModule({ currentUser, token }: UsersModuleProps) {
                     Generate
                   </button>
                 </div>
-                <p className="text-[10px] text-neutral-400 mt-1">Employee uses this to log in via "Staff Password Login". It will be emailed to them automatically.</p>
+                <p className="text-[10px] text-neutral-400 mt-1">Employee uses this to log in with their email on the login screen. It will be emailed to them automatically.</p>
               </div>
               <div className="p-2.5 bg-blue-50 border border-blue-200 text-blue-800 text-[11px] rounded-lg leading-relaxed">
                 The account will be created as <span className="font-semibold">Approved & Active</span> immediately. Credentials will be sent to the employee's email.
@@ -586,7 +595,7 @@ export default function UsersModule({ currentUser, token }: UsersModuleProps) {
               </div>
               <div>
                 <h2 className="text-sm font-semibold text-neutral-900">Account Created</h2>
-                <p className="text-xs text-neutral-500">Share the PIN below with the employee securely.</p>
+                <p className="text-xs text-neutral-500">Temporary password has been emailed. Share it securely if needed.</p>
               </div>
             </div>
 
@@ -600,15 +609,19 @@ export default function UsersModule({ currentUser, token }: UsersModuleProps) {
               <div className="text-[10px] font-bold uppercase tracking-widest text-neutral-400 mb-2">Temporary Password</div>
               <div className="text-3xl font-mono font-bold text-white tracking-[0.3em]">{createdPinInfo.pin}</div>
               <button
-                onClick={() => navigator.clipboard.writeText(createdPinInfo.pin)}
+                onClick={() => {
+                  navigator.clipboard.writeText(createdPinInfo.pin);
+                  setPinCopied(true);
+                  setTimeout(() => setPinCopied(false), 2000);
+                }}
                 className="mt-3 inline-flex items-center gap-1.5 text-[11px] text-neutral-400 hover:text-white transition-colors cursor-pointer"
               >
-                <Copy className="w-3 h-3" /> Copy Password
+                <Copy className="w-3 h-3" /> {pinCopied ? 'Copied!' : 'Copy Password'}
               </button>
             </div>
 
             <p className="text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 leading-relaxed">
-              This password has been emailed to the employee. They must use it to log in via <strong>Staff Password Login</strong> on the login screen.
+              This password has been emailed to the employee. They can log in using their email address and this password on the login screen.
             </p>
 
             <button onClick={() => setCreatedPinInfo(null)}
@@ -715,6 +728,43 @@ export default function UsersModule({ currentUser, token }: UsersModuleProps) {
                 className="flex-1 bg-neutral-900 hover:bg-neutral-800 disabled:bg-neutral-300 text-white text-xs font-semibold py-2 rounded-lg cursor-pointer transition-colors flex items-center justify-center gap-2">
                 {isLinking ? <Loader className="w-3.5 h-3.5 animate-spin" /> : <UserCheck2 className="w-3.5 h-3.5" />}
                 {isLinking ? 'Approving...' : 'Approve & Activate'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Suspend / Activate Confirmation Modal */}
+      {statusConfirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-xs p-6 space-y-4">
+            <div className="flex items-start gap-3">
+              <div className={`p-2 rounded-full shrink-0 ${statusConfirm.currentStatus ? 'bg-red-50' : 'bg-emerald-50'}`}>
+                {statusConfirm.currentStatus
+                  ? <UserX className="w-4 h-4 text-red-500" />
+                  : <UserCheck2 className="w-4 h-4 text-emerald-600" />}
+              </div>
+              <div>
+                <h2 className="text-sm font-semibold text-neutral-900">
+                  {statusConfirm.currentStatus ? 'Suspend User?' : 'Reactivate User?'}
+                </h2>
+                <p className="text-xs text-neutral-500 mt-1 leading-relaxed">
+                  {statusConfirm.currentStatus
+                    ? 'This will block the user from logging in until reactivated.'
+                    : 'This will restore the user\'s login access.'}
+                </p>
+              </div>
+            </div>
+            <div className="flex gap-3 pt-1">
+              <button onClick={() => setStatusConfirm(null)}
+                className="flex-1 border border-neutral-200 text-neutral-700 hover:bg-neutral-50 text-xs font-semibold py-2.5 rounded-lg cursor-pointer transition-colors">
+                Cancel
+              </button>
+              <button onClick={() => handleUpdateStatus(statusConfirm.userId, statusConfirm.currentStatus)}
+                className={`flex-1 text-white text-xs font-semibold py-2.5 rounded-lg cursor-pointer transition-colors ${
+                  statusConfirm.currentStatus ? 'bg-red-500 hover:bg-red-600' : 'bg-emerald-600 hover:bg-emerald-700'
+                }`}>
+                {statusConfirm.currentStatus ? 'Suspend' : 'Reactivate'}
               </button>
             </div>
           </div>

@@ -250,7 +250,8 @@ export default function LoanApplicationsModule({ currentUser, token, settings }:
             )}
             <div>
               <label className="block text-[10px] font-bold uppercase text-neutral-400 mb-1">
-                Notes {reviewModal.action === 'rejected' ? '(required — explain reason)' : '(optional)'}
+                Notes{reviewModal.action === 'rejected' && <span className="text-red-400 ml-0.5">*</span>}
+                <span className="normal-case font-normal ml-1">{reviewModal.action === 'rejected' ? '(required — explain reason)' : '(optional)'}</span>
               </label>
               <textarea
                 value={reviewNotes}

@@ -185,7 +185,7 @@ export default function ReportsModule({ currentUser, token, settings }: ReportsM
                     <p className="text-[10px] text-neutral-500 mt-0.5 leading-relaxed font-sans">
                       {accountsAreBalanced
                         ? `Auditing trace checks out perfectly! Total Net Debits match Total Net Credits exactly across all ledger codes.`
-                        : `A double-entry accounting imbalance of ${settings.currencySymbol}${Math.abs(totalDebitSum - totalCreditSum / 100).toFixed(2)} was identified.`}
+                        : `A double-entry accounting imbalance of ${settings.currencySymbol}${(Math.abs(totalDebitSum - totalCreditSum) / 100).toFixed(2)} was identified.`}
                     </p>
                   </div>
                 </div>

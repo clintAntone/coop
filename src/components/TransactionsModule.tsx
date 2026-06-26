@@ -44,6 +44,17 @@ export default function TransactionsModule({ currentUser, token, settings }: Tra
   const [manualCreditCoa, setManualCreditCoa] = useState('3010'); // Defaults to Share Capital Equity
   const [posting, setPosting] = useState(false);
 
+  const closePostingModal = () => {
+    closePostingModal();
+    setSelectedMemberId('');
+    setMemberSearch('');
+    setTransactionType('deposit');
+    setAmount('');
+    setDescription('');
+    setManualDebitCoa('2010');
+    setManualCreditCoa('3010');
+  };
+
   // Modal Reversal state
   const [reversalTarget, setReversalTarget] = useState<Transaction | null>(null);
   const [reversalReason, setReversalReason] = useState('');
@@ -144,7 +155,7 @@ export default function TransactionsModule({ currentUser, token, settings }: Tra
         throw new Error(err.error || 'Fulfillment failure: unable to post transaction.');
       }
 
-      setShowPostingModal(false);
+      closePostingModal();
       fetchTransactions();
     } catch (err: any) {
       console.error(err);

@@ -229,7 +229,7 @@ export default function ProfileModule({ currentUser, token, settings, onProfileU
             value={phone}
             onChange={e => setPhone(e.target.value)}
             className={inputCls}
-            placeholder="+63 9XX XXX XXXX"
+            placeholder="e.g. +1 234 567 8900"
           />
         </div>
 
