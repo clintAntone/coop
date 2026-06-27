@@ -25,6 +25,13 @@ export default function AuthScreen({ onMockLogin, onPinLogin, isLoading, errorMs
   const [authActionLoading, setAuthActionLoading] = useState(false);
   const [localError, setLocalError] = useState<string | null>(null);
 
+  // Forgot password state
+  const [showForgotPw, setShowForgotPw] = useState(false);
+  const [forgotEmail, setForgotEmail] = useState('');
+  const [forgotLoading, setForgotLoading] = useState(false);
+  const [forgotSent, setForgotSent] = useState(false);
+  const [forgotError, setForgotError] = useState<string | null>(null);
+
   // Forced change-password modal state
   const [showChangePassword, setShowChangePassword] = useState(false);
   const [changePwToken, setChangePwToken] = useState<string | null>(null);
@@ -168,6 +175,28 @@ export default function AuthScreen({ onMockLogin, onPinLogin, isLoading, errorMs
       setLocalError(err.message || 'Authentication failed.');
     } finally {
       setAuthActionLoading(false);
+    }
+  };
+
+  const handleForgotPassword = async () => {
+    setForgotError(null);
+    if (!forgotEmail) return;
+    setForgotLoading(true);
+    try {
+      const res = await fetch('/api/auth/forgot-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: forgotEmail.trim() }),
+      });
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error || 'Failed to send reset email.');
+      }
+      setForgotSent(true);
+    } catch (err: any) {
+      setForgotError(err.message || 'Failed to send reset email.');
+    } finally {
+      setForgotLoading(false);
     }
   };
 
@@ -376,11 +405,17 @@ export default function AuthScreen({ onMockLogin, onPinLogin, isLoading, errorMs
               {authActionLoading ? 'Processing...' : isRegistering ? 'Register Account' : 'Authenticate'}
             </button>
 
-            <div className="text-center pt-1">
+            <div className="text-center pt-1 space-y-1.5">
               <button type="button" onClick={handleSwitchMode}
-                className="text-[11px] text-neutral-500 hover:text-neutral-900 font-medium underline cursor-pointer">
+                className="text-[11px] text-neutral-500 hover:text-neutral-900 font-medium underline cursor-pointer block w-full">
                 {isRegistering ? 'Already have an account? Sign In' : 'New employee? Register here'}
               </button>
+              {!isRegistering && (
+                <button type="button" onClick={() => { setShowForgotPw(true); setForgotEmail(email); setForgotSent(false); setForgotError(null); }}
+                  className="text-[11px] text-neutral-400 hover:text-neutral-600 cursor-pointer">
+                  Forgot password?
+                </button>
+              )}
             </div>
           </form>
 
@@ -390,6 +425,48 @@ export default function AuthScreen({ onMockLogin, onPinLogin, isLoading, errorMs
           <div className="bg-neutral-50 border-t border-neutral-100 px-6 py-4 flex items-center justify-between text-[10px] text-neutral-400">
             <span>Development - HC Koop</span>
             <span className="font-mono text-[9px]">v1.0.0 (PostgreSQL Mode)</span>
+          </div>
+        )}
+
+        {showForgotPw && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6 space-y-4">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-neutral-100 border border-neutral-200 flex items-center justify-center shrink-0">
+                  <KeyRound className="w-5 h-5 text-neutral-700" />
+                </div>
+                <div>
+                  <h2 className="text-sm font-semibold text-neutral-900">Reset Password</h2>
+                  <p className="text-xs text-neutral-500">We'll send a reset link to your email.</p>
+                </div>
+              </div>
+
+              {forgotSent ? (
+                <div className="p-3 bg-emerald-50 border border-emerald-200 text-emerald-700 text-xs rounded-lg flex items-start gap-2">
+                  <CheckCircle className="w-4 h-4 mt-0.5 shrink-0" />
+                  Reset link sent! Check your inbox and click the link to set a new password.
+                </div>
+              ) : (
+                <>
+                  {forgotError && (
+                    <div className="p-3 bg-red-50 border border-red-200 text-red-600 text-xs rounded-lg">{forgotError}</div>
+                  )}
+                  <input type="email" value={forgotEmail} onChange={e => setForgotEmail(e.target.value)}
+                    className="w-full text-sm border border-neutral-200 rounded-lg px-3 py-2.5 focus:outline-none focus:ring-1 focus:ring-neutral-900 placeholder:text-neutral-300"
+                    placeholder="Your account email" />
+                  <button onClick={handleForgotPassword} disabled={forgotLoading || !forgotEmail}
+                    className="w-full bg-neutral-900 hover:bg-neutral-800 disabled:bg-neutral-300 text-white text-sm font-semibold py-2.5 rounded-lg cursor-pointer transition-colors flex items-center justify-center gap-2">
+                    {forgotLoading ? <Loader className="w-4 h-4 animate-spin" /> : <KeyRound className="w-4 h-4" />}
+                    {forgotLoading ? 'Sending…' : 'Send Reset Link'}
+                  </button>
+                </>
+              )}
+
+              <button onClick={() => setShowForgotPw(false)}
+                className="w-full text-xs text-neutral-400 hover:text-neutral-700 cursor-pointer py-1">
+                {forgotSent ? 'Close' : 'Cancel'}
+              </button>
+            </div>
           </div>
         )}
 

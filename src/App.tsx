@@ -12,7 +12,7 @@ import UsersModule from './components/UsersModule.tsx';
 import ProfileModule from './components/ProfileModule.tsx';
 import SettingsModule from './components/SettingsModule.tsx';
 import LoanApplicationsModule from './components/LoanApplicationsModule.tsx';
-import { AlertTriangle, KeyRound, Loader, ShieldCheck, Menu } from 'lucide-react';
+import { AlertTriangle, KeyRound, Loader, ShieldCheck, Menu, CheckCircle } from 'lucide-react';
 
 export default function App() {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
@@ -22,6 +22,14 @@ export default function App() {
   const [activeTab, setActiveTab] = useState<string>('members');
   const [mountedTabs, setMountedTabs] = useState<Set<string>>(new Set(['members']));
   const [sidebarOpen, setSidebarOpen] = useState(false);
+
+  // Password recovery state — set when Supabase fires PASSWORD_RECOVERY event
+  const [showPasswordReset, setShowPasswordReset] = useState(false);
+  const [resetNewPw, setResetNewPw] = useState('');
+  const [resetConfirmPw, setResetConfirmPw] = useState('');
+  const [resetLoading, setResetLoading] = useState(false);
+  const [resetError, setResetError] = useState<string | null>(null);
+  const [resetDone, setResetDone] = useState(false);
 
   const navigateTo = (tab: string) => {
     setMountedTabs(prev => new Set([...prev, tab]));
@@ -127,6 +135,12 @@ export default function App() {
       });
 
       const { data: { subscription } } = supabaseClient.auth.onAuthStateChange((event, session) => {
+        if (event === 'PASSWORD_RECOVERY') {
+          // User clicked a password-reset link — show the reset form, don't log them in yet
+          setShowPasswordReset(true);
+          setIsLoading(false);
+          return;
+        }
         if (session) {
           if (event === 'SIGNED_IN') {
             // Only do full auth flow for genuine new sign-ins (no existing session)
@@ -276,6 +290,30 @@ export default function App() {
     setIsLoading(false);
   };
 
+  const handlePasswordReset = async () => {
+    setResetError(null);
+    if (resetNewPw !== resetConfirmPw) { setResetError('Passwords do not match.'); return; }
+    if (resetNewPw.length < 6) { setResetError('Password must be at least 6 characters.'); return; }
+    setResetLoading(true);
+    try {
+      const supabase = getSupabaseClient();
+      if (!supabase) throw new Error('Supabase not configured.');
+      const { error } = await supabase.auth.updateUser({ password: resetNewPw });
+      if (error) throw error;
+      setResetDone(true);
+      setTimeout(() => {
+        setShowPasswordReset(false);
+        setResetDone(false);
+        setResetNewPw('');
+        setResetConfirmPw('');
+      }, 2500);
+    } catch (err: any) {
+      setResetError(err.message || 'Failed to update password.');
+    } finally {
+      setResetLoading(false);
+    }
+  };
+
   /**
    * Fast Development Swap to inspect downstream UX of other accounts instantly.
    */
@@ -317,6 +355,59 @@ export default function App() {
       }
     }
   };
+
+  if (showPasswordReset) {
+    return (
+      <div className="min-h-screen bg-neutral-50 flex items-center justify-center p-4">
+        <div className="w-full max-w-sm bg-white border border-neutral-200 rounded-xl shadow-xl p-6 space-y-5">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-neutral-100 border border-neutral-200 flex items-center justify-center shrink-0">
+              <KeyRound className="w-5 h-5 text-neutral-700" />
+            </div>
+            <div>
+              <h2 className="text-sm font-semibold text-neutral-900">Set New Password</h2>
+              <p className="text-xs text-neutral-500">Choose a strong password for your account.</p>
+            </div>
+          </div>
+
+          {resetDone ? (
+            <div className="p-3 bg-emerald-50 border border-emerald-200 text-emerald-700 text-xs rounded-lg flex items-center gap-2">
+              <CheckCircle className="w-4 h-4 shrink-0" />
+              Password updated! Redirecting to login…
+            </div>
+          ) : (
+            <>
+              {resetError && (
+                <div className="p-3 bg-red-50 border border-red-200 text-red-600 text-xs rounded-lg flex items-start gap-2">
+                  <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0" />
+                  {resetError}
+                </div>
+              )}
+              <div className="space-y-3">
+                <div>
+                  <label className="block text-[10px] font-bold uppercase text-neutral-400 mb-1">New Password</label>
+                  <input type="password" value={resetNewPw} onChange={e => setResetNewPw(e.target.value)}
+                    className="w-full text-sm border border-neutral-200 rounded-lg px-3 py-2.5 focus:outline-none focus:ring-1 focus:ring-neutral-900 placeholder:text-neutral-300"
+                    placeholder="At least 6 characters" />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-bold uppercase text-neutral-400 mb-1">Confirm Password</label>
+                  <input type="password" value={resetConfirmPw} onChange={e => setResetConfirmPw(e.target.value)}
+                    className="w-full text-sm border border-neutral-200 rounded-lg px-3 py-2.5 focus:outline-none focus:ring-1 focus:ring-neutral-900 placeholder:text-neutral-300"
+                    placeholder="Repeat new password" />
+                </div>
+              </div>
+              <button onClick={handlePasswordReset} disabled={resetLoading || !resetNewPw || !resetConfirmPw}
+                className="w-full bg-neutral-900 hover:bg-neutral-800 disabled:bg-neutral-300 text-white text-sm font-semibold py-2.5 rounded-lg cursor-pointer transition-colors flex items-center justify-center gap-2">
+                {resetLoading ? <Loader className="w-4 h-4 animate-spin" /> : <KeyRound className="w-4 h-4" />}
+                {resetLoading ? 'Saving…' : 'Update Password'}
+              </button>
+            </>
+          )}
+        </div>
+      </div>
+    );
+  }
 
   if (isLoading) {
     return (

@@ -445,33 +445,135 @@ export async function createApp() {
   });
 
   // Send credentials email via Resend
-  const sendCredentialsEmail = async (to: string, displayName: string, tempPassword: string, appName: string) => {
+  const sendCredentialsEmail = async (opts: {
+    toEmail: string;
+    employeeName: string;
+    pin: string;
+    appName: string;
+    username?: string;
+    branchName?: string;
+  }) => {
+    const { toEmail, employeeName, pin, appName, username, branchName } = opts;
     const apiKey = process.env.RESEND_API_KEY;
     if (!apiKey) { console.warn('RESEND_API_KEY not set — skipping credentials email.'); return; }
     const resend = new Resend(apiKey);
     await resend.emails.send({
       from: process.env.RESEND_FROM_EMAIL || `${appName} <onboarding@resend.dev>`,
-      to,
+      to: toEmail,
       subject: `Your ${appName} account credentials`,
       html: `
         <div style="font-family:sans-serif;max-width:480px;margin:0 auto;padding:24px;">
           <h2 style="margin-bottom:4px;">${appName}</h2>
-          <p style="color:#666;margin-top:0;">Employee Account Created</p>
+          <p style="color:#666;margin-top:0;">${branchName || 'Employee Account Created'}</p>
           <hr style="border:none;border-top:1px solid #eee;margin:16px 0;" />
-          <p>Hi <strong>${displayName}</strong>,</p>
+          <p>Hi <strong>${employeeName}</strong>,</p>
           <p>An account has been created for you. Use the credentials below to log in:</p>
           <div style="background:#f5f5f5;border-radius:8px;padding:16px;margin:16px 0;">
             <p style="margin:0 0 8px;font-size:12px;color:#888;text-transform:uppercase;letter-spacing:0.05em;">Email</p>
-            <p style="margin:0 0 16px;font-weight:600;">${to}</p>
+            <p style="margin:0 0 16px;font-weight:600;">${toEmail}</p>
+            ${username ? `
+            <p style="margin:0 0 8px;font-size:12px;color:#888;text-transform:uppercase;letter-spacing:0.05em;">Username</p>
+            <p style="margin:0 0 16px;font-weight:600;">${username}</p>
+            ` : ''}
             <p style="margin:0 0 8px;font-size:12px;color:#888;text-transform:uppercase;letter-spacing:0.05em;">Temporary Password</p>
-            <p style="margin:0;font-size:22px;font-weight:700;letter-spacing:0.15em;font-family:monospace;">${tempPassword}</p>
+            <p style="margin:0;font-size:24px;font-weight:700;letter-spacing:0.2em;font-family:monospace;">${pin}</p>
           </div>
-          <p style="color:#666;font-size:13px;">Select <strong>"Staff Password Login"</strong> on the login screen and enter your email and the temporary password above.</p>
+          <p style="color:#666;font-size:13px;">Select <strong>"Staff Password Login"</strong> on the login screen and enter your email and the temporary password above. You will be asked to set a new password on first login.</p>
           <p style="color:#999;font-size:12px;margin-top:24px;">This is an automated message from ${appName}. Please keep your credentials secure.</p>
         </div>
       `,
     });
   };
+
+  // Standalone send-credentials endpoint — callable from the frontend (System Admin only)
+  app.post('/api/send-credentials', requireAuth, async (req: AuthRequest, res) => {
+    try {
+      if (req.dbUser?.role !== 'System Admin') return res.status(403).json({ error: 'Access denied.' });
+      const { toEmail, employeeName, pin, username, branchName } = req.body;
+      if (!toEmail || !employeeName || !pin) {
+        return res.status(400).json({ error: 'toEmail, employeeName, and pin are required.' });
+      }
+      const settingsRows = await db.select().from(appSettings);
+      const settingsMap: Record<string, string> = Object.fromEntries(settingsRows.map(r => [r.key, r.value]));
+      const appName = settingsMap['app_name'] || 'Cooperative System';
+      await sendCredentialsEmail({ toEmail, employeeName, pin, appName, username, branchName });
+      res.json({ ok: true });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // Password reset — generate Supabase recovery link via admin API and send via Resend
+  app.post('/api/auth/forgot-password', async (req, res) => {
+    try {
+      const { email } = req.body;
+      if (!email || typeof email !== 'string' || !email.includes('@')) {
+        return res.status(400).json({ error: 'Valid email is required.' });
+      }
+      const normalizedEmail = email.trim().toLowerCase();
+
+      const supabaseUrl = (process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || '').replace(/\/$/, '');
+      const serviceKey = (process.env.SUPABASE_SERVICE_ROLE_KEY || '').trim();
+      if (!supabaseUrl || !serviceKey || serviceKey.startsWith('your-')) {
+        return res.status(503).json({ error: 'Password reset is not configured on this server.' });
+      }
+
+      const adminClient = createSupabaseClient(supabaseUrl, serviceKey, {
+        auth: { autoRefreshToken: false, persistSession: false },
+      });
+
+      // Generate a recovery link without sending Supabase's own email
+      const { data, error } = await adminClient.auth.admin.generateLink({
+        type: 'recovery',
+        email: normalizedEmail,
+        options: { redirectTo: (process.env.APP_URL || process.env.VITE_APP_URL || '').replace(/\/$/, '') || supabaseUrl },
+      });
+      if (error) throw new Error(error.message);
+
+      const resetLink = data.properties?.action_link;
+      if (!resetLink) throw new Error('Failed to generate reset link.');
+
+      // Send via Resend
+      const apiKey = process.env.RESEND_API_KEY;
+      if (!apiKey) {
+        console.warn('RESEND_API_KEY not set — cannot send password reset email.');
+        return res.status(503).json({ error: 'Email service is not configured on this server.' });
+      }
+
+      const settingsRows = await db.select().from(appSettings).limit(1);
+      const appName = settingsRows[0]?.value && typeof settingsRows[0].value === 'object'
+        ? (settingsRows[0].value as any).app_name || 'Cooperative'
+        : 'Cooperative';
+
+      const resend = new Resend(apiKey);
+      await resend.emails.send({
+        from: process.env.RESEND_FROM_EMAIL || `${appName} <onboarding@resend.dev>`,
+        to: normalizedEmail,
+        subject: `Reset your ${appName} password`,
+        html: `
+          <div style="font-family:sans-serif;max-width:480px;margin:0 auto;padding:24px;">
+            <h2 style="margin-bottom:4px;">${appName}</h2>
+            <p style="color:#666;margin-top:0;">Password Reset Request</p>
+            <hr style="border:none;border-top:1px solid #eee;margin:16px 0;" />
+            <p>We received a request to reset your password. Click the button below to choose a new one.</p>
+            <p style="text-align:center;margin:24px 0;">
+              <a href="${resetLink}" style="background:#111;color:#fff;text-decoration:none;padding:12px 28px;border-radius:8px;font-weight:600;font-size:14px;">
+                Reset Password
+              </a>
+            </p>
+            <p style="color:#999;font-size:12px;">This link expires in 1 hour. If you didn't request a password reset, you can safely ignore this email.</p>
+            <p style="color:#ccc;font-size:11px;margin-top:24px;">Automated message from ${appName}.</p>
+          </div>
+        `,
+      });
+
+      res.json({ ok: true });
+    } catch (err: any) {
+      console.error('[forgot-password]', err.message);
+      // Always return success to avoid exposing whether an email is registered
+      res.json({ ok: true });
+    }
+  });
 
   // PIN login for manually-created employee accounts (no Supabase account required)
   app.post('/api/auth/pin-login', async (req, res) => {
@@ -890,7 +992,7 @@ export async function createApp() {
       const settingsRows = await db.select().from(appSettings);
       const settingsMap: Record<string, string> = Object.fromEntries(settingsRows.map(r => [r.key, r.value]));
       const appName = settingsMap['app_name'] || 'Cooperative System';
-      sendCredentialsEmail(email.toLowerCase().trim(), displayName.trim(), tempPin.trim(), appName).catch(e => console.error('Credentials email failed:', e));
+      sendCredentialsEmail({ toEmail: email.toLowerCase().trim(), employeeName: displayName.trim(), pin: tempPin.trim(), appName }).catch(e => console.error('Credentials email failed:', e));
       res.status(201).json(created);
     } catch (err: any) {
       res.status(500).json({ error: err.message });
