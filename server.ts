@@ -292,7 +292,18 @@ export async function createApp() {
 
       if (localMatch) {
         if (localMatch.isClaimed) {
-          return res.json({ found: false, reason: 'already_claimed' });
+          // Verify a live user actually holds this claim — auto-heal orphaned claims
+          const claimHolder = localMatch.claimedByUserId
+            ? await db.select().from(users).where(eq(users.id, localMatch.claimedByUserId)).limit(1)
+            : [];
+          if (claimHolder.length === 0) {
+            // No live user found — reset the orphaned claim so the ID can be re-used
+            await db.update(validEmployeeIds)
+              .set({ isClaimed: false, claimedByUserId: null })
+              .where(eq(validEmployeeIds.employeeId, localMatch.employeeId));
+          } else {
+            return res.json({ found: false, reason: 'already_claimed' });
+          }
         }
         const fullName = [localMatch.firstName, localMatch.middleName, localMatch.lastName]
           .filter(Boolean).join(' ');
@@ -314,7 +325,17 @@ export async function createApp() {
         .limit(1);
 
       if (claimed.length > 0) {
-        return res.json({ found: false, reason: 'already_claimed' });
+        // Verify the claim holder still exists
+        const claimHolder = claimed[0].claimedByUserId
+          ? await db.select().from(users).where(eq(users.id, claimed[0].claimedByUserId)).limit(1)
+          : [];
+        if (claimHolder.length === 0) {
+          await db.update(validEmployeeIds)
+            .set({ isClaimed: false, claimedByUserId: null })
+            .where(eq(validEmployeeIds.employeeId, hrEmployee.employee_id));
+        } else {
+          return res.json({ found: false, reason: 'already_claimed' });
+        }
       }
 
       const fullName = [hrEmployee.first_name, hrEmployee.middle_name, hrEmployee.last_name]
