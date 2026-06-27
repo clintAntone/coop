@@ -2,6 +2,7 @@ import express from 'express';
 import path from 'path';
 import crypto from 'crypto';
 import { Resend } from 'resend';
+import { createClient as createSupabaseClient } from '@supabase/supabase-js';
 // Vite is only used in dev — dynamic import avoids bundling it in production
 type ViteDevServer = any;
 import { db } from './src/db/index.ts';
@@ -869,6 +870,46 @@ export async function createApp() {
       const appName = settingsMap['app_name'] || 'Cooperative System';
       sendCredentialsEmail(email.toLowerCase().trim(), displayName.trim(), tempPin.trim(), appName).catch(e => console.error('Credentials email failed:', e));
       res.status(201).json(created);
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // Send Supabase invite email to a pre-registered (unconfirmed) user (System Admin only)
+  app.post('/api/users/:id/invite', requireAuth, async (req: AuthRequest, res) => {
+    try {
+      if (req.dbUser?.role !== 'System Admin') {
+        return res.status(403).json({ error: 'Access Denied: System Admin only.' });
+      }
+      const targetId = parseInt(req.params.id);
+      const target = await db.select().from(users).where(eq(users.id, targetId)).limit(1);
+      if (!target.length) return res.status(404).json({ error: 'User not found.' });
+
+      const targetUser = target[0];
+      if (!targetUser.uid.startsWith(PENDING_UID_PREFIX)) {
+        return res.status(400).json({ error: 'This user already has a confirmed Supabase account.' });
+      }
+
+      const supabaseUrl = (process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || '').replace(/\/$/, '');
+      const serviceKey = (process.env.SUPABASE_SERVICE_ROLE_KEY || '').trim();
+      if (!supabaseUrl || !serviceKey || serviceKey.startsWith('your-')) {
+        return res.status(503).json({ error: 'Supabase service role key is not configured on the server.' });
+      }
+
+      const adminClient = createSupabaseClient(supabaseUrl, serviceKey, {
+        auth: { autoRefreshToken: false, persistSession: false },
+      });
+
+      const { error } = await adminClient.auth.admin.inviteUserByEmail(targetUser.email);
+      if (error) throw new Error(error.message);
+
+      await db.insert(auditLogs).values({
+        userId: req.dbUser!.id,
+        action: 'INVITE_USER',
+        details: `Sent Supabase invite to ${targetUser.email} (user ID ${targetId})`,
+      });
+
+      res.json({ ok: true });
     } catch (err: any) {
       res.status(500).json({ error: err.message });
     }

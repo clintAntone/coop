@@ -158,10 +158,32 @@ export default function AuthScreen({ onMockLogin, onPinLogin, isLoading, errorMs
           return;
         }
         const { error } = await supabase.auth.signInWithPassword({ email, password });
-        if (error) throw error;
+        if (error) {
+          // Supabase returns "Email not confirmed" when the signup confirmation link
+          // hasn't been clicked yet. Give a clearer message with a resend option.
+          if (error.message?.toLowerCase().includes('email not confirmed') || error.message?.toLowerCase().includes('not confirmed')) {
+            setLocalError('__unconfirmed__');
+          } else {
+            throw error;
+          }
+        }
       }
     } catch (err: any) {
       setLocalError(err.message || 'Authentication failed.');
+    } finally {
+      setAuthActionLoading(false);
+    }
+  };
+
+  const handleResendConfirmation = async () => {
+    const supabase = getSupabaseClient();
+    if (!supabase || !email) return;
+    setAuthActionLoading(true);
+    try {
+      await supabase.auth.resend({ type: 'signup', email });
+      setLocalError('__resent__');
+    } catch {
+      setLocalError('Could not resend confirmation email. Try again later.');
     } finally {
       setAuthActionLoading(false);
     }
@@ -271,12 +293,28 @@ export default function AuthScreen({ onMockLogin, onPinLogin, isLoading, errorMs
         </div>
 
         <div className="p-6 space-y-6">
-          {(errorMsg || localError) && (
+          {localError === '__unconfirmed__' ? (
+            <div className="p-3 bg-amber-50 border border-amber-200 text-amber-800 text-xs rounded-lg space-y-2">
+              <div className="flex items-start gap-2">
+                <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0 text-amber-500" />
+                <span>Your email address hasn't been confirmed yet. Please check your inbox and click the confirmation link, then try logging in again.</span>
+              </div>
+              <button type="button" onClick={handleResendConfirmation} disabled={authActionLoading}
+                className="text-amber-700 underline font-semibold cursor-pointer disabled:opacity-50">
+                Resend confirmation email
+              </button>
+            </div>
+          ) : localError === '__resent__' ? (
+            <div className="p-3 bg-emerald-50 border border-emerald-200 text-emerald-700 text-xs rounded-lg flex items-start gap-2">
+              <CheckCircle className="w-4 h-4 mt-0.5 shrink-0" />
+              <span>Confirmation email resent. Check your inbox and click the link before logging in.</span>
+            </div>
+          ) : (errorMsg || localError) ? (
             <div className="p-3 bg-red-50 border border-red-200 text-red-600 text-xs rounded-lg flex items-start gap-2">
               <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0" />
               <span>{localError || errorMsg}</span>
             </div>
-          )}
+          ) : null}
 
           <form onSubmit={handleEmailAuth} className="space-y-3.5">
             <h2 className="text-xs font-bold uppercase tracking-wider text-neutral-400">
