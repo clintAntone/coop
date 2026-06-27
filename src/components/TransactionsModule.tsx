@@ -60,10 +60,21 @@ export default function TransactionsModule({ currentUser, token, settings }: Tra
   const [reversalReason, setReversalReason] = useState('');
   const [reversing, setReversing] = useState(false);
 
+  // Deposit requests tab
+  const [activeTab, setActiveTab] = useState<'ledger' | 'deposits'>('ledger');
+  const [depositRequestsList, setDepositRequestsList] = useState<any[]>([]);
+  const [depositReviewModal, setDepositReviewModal] = useState<any | null>(null);
+  const [depositReviewNotes, setDepositReviewNotes] = useState('');
+  const [depositReviewing, setDepositReviewing] = useState(false);
+  const [depositReviewError, setDepositReviewError] = useState<string | null>(null);
+  const [viewReceiptUrl, setViewReceiptUrl] = useState<string | null>(null);
+  const [depositRequestsLoading, setDepositRequestsLoading] = useState(false);
+
   useEffect(() => {
     fetchTransactions();
     fetchMembers();
     fetchCOAs();
+    fetchDepositRequests();
   }, [token]);
 
   const fetchTransactions = async () => {
@@ -111,6 +122,34 @@ export default function TransactionsModule({ currentUser, token, settings }: Tra
     } catch (err) {
       console.error(err);
     }
+  };
+
+  const fetchDepositRequests = async () => {
+    setDepositRequestsLoading(true);
+    try {
+      const res = await fetch('/api/deposit-requests', { headers: { Authorization: `Bearer ${token}` } });
+      if (res.ok) setDepositRequestsList(await res.json());
+    } catch {} finally { setDepositRequestsLoading(false); }
+  };
+
+  const handleDepositReview = async (action: 'approve' | 'reject') => {
+    if (!depositReviewModal) return;
+    if (action === 'reject' && !depositReviewNotes.trim()) { setDepositReviewError('Rejection reason is required.'); return; }
+    setDepositReviewing(true);
+    setDepositReviewError(null);
+    try {
+      const res = await fetch(`/api/deposit-requests/${depositReviewModal.id}/${action}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ notes: depositReviewNotes }),
+      });
+      if (!res.ok) { const e = await res.json(); throw new Error(e.error); }
+      setDepositReviewModal(null);
+      setDepositReviewNotes('');
+      fetchDepositRequests();
+      if (action === 'approve') fetchTransactions();
+    } catch (err: any) { setDepositReviewError(err.message); }
+    finally { setDepositReviewing(false); }
   };
 
   const handleOpenPosting = () => {
@@ -231,7 +270,27 @@ export default function TransactionsModule({ currentUser, token, settings }: Tra
         )}
       </div>
 
+      {/* Tab Switcher */}
+      {['System Admin', 'Manager', 'Accounting Officer', 'Cashier'].includes(currentUser.role) && (
+        <div className="flex gap-1 mb-6 bg-neutral-100 rounded-xl p-1 w-fit">
+          <button onClick={() => setActiveTab('ledger')}
+            className={`text-xs font-semibold px-4 py-1.5 rounded-lg transition-colors cursor-pointer ${activeTab === 'ledger' ? 'bg-white shadow text-neutral-900' : 'text-neutral-500 hover:text-neutral-700'}`}>
+            Ledger
+          </button>
+          <button onClick={() => { setActiveTab('deposits'); fetchDepositRequests(); }}
+            className={`text-xs font-semibold px-4 py-1.5 rounded-lg transition-colors cursor-pointer flex items-center gap-1.5 ${activeTab === 'deposits' ? 'bg-white shadow text-neutral-900' : 'text-neutral-500 hover:text-neutral-700'}`}>
+            Deposit Requests
+            {depositRequestsList.filter(d => d.status === 'pending').length > 0 && (
+              <span className="bg-amber-400 text-white text-[9px] font-bold px-1.5 py-0.5 rounded-full">
+                {depositRequestsList.filter(d => d.status === 'pending').length}
+              </span>
+            )}
+          </button>
+        </div>
+      )}
+
       {/* Main Ledger Sheet */}
+      {activeTab === 'ledger' && (
       <div className="bg-white border border-neutral-200/80 rounded-xl shadow-xl shadow-neutral-200/20 overflow-hidden">
         {/* Filtering bar */}
         <div className="p-4 border-b border-neutral-150 bg-neutral-50/40 flex items-center gap-3">
@@ -391,6 +450,170 @@ export default function TransactionsModule({ currentUser, token, settings }: Tra
           </>
         )}
       </div>
+      )}
+
+      {/* Deposit Requests Tab */}
+      {activeTab === 'deposits' && (
+        <div className="bg-white border border-neutral-200/80 rounded-xl shadow-xl shadow-neutral-200/20 overflow-hidden">
+          <div className="p-4 border-b border-neutral-150 bg-neutral-50/40 flex items-center justify-between">
+            <div>
+              <h2 className="text-sm font-semibold text-neutral-900">Member Deposit Requests</h2>
+              <p className="text-xs text-neutral-400 mt-0.5">Review receipt submissions and approve to post to ledger.</p>
+            </div>
+            <button onClick={fetchDepositRequests} className="p-1.5 border border-neutral-200 hover:bg-neutral-50 rounded-lg transition-colors cursor-pointer">
+              <RefreshCw className="w-3.5 h-3.5 text-neutral-500" />
+            </button>
+          </div>
+
+          {depositRequestsLoading ? (
+            <div className="py-16 flex flex-col items-center gap-3">
+              <Loader className="w-5 h-5 text-neutral-400 animate-spin" />
+              <span className="text-xs text-neutral-500">Loading requests...</span>
+            </div>
+          ) : depositRequestsList.length === 0 ? (
+            <div className="py-16 text-center flex flex-col items-center gap-2">
+              <CheckCircle className="w-8 h-8 text-neutral-300" />
+              <p className="text-xs text-neutral-400">No deposit requests yet.</p>
+            </div>
+          ) : (
+            <>
+              {/* Mobile cards */}
+              <ul className="md:hidden divide-y divide-neutral-100">
+                {depositRequestsList.map(dr => (
+                  <li key={dr.id} className="p-4 space-y-2">
+                    <div className="flex items-start justify-between gap-2">
+                      <div>
+                        <div className="text-sm font-semibold text-neutral-900">{dr.memberFirstName} {dr.memberLastName}</div>
+                        <div className="text-[10px] font-mono text-neutral-400">{dr.memberEmployeeId}</div>
+                      </div>
+                      <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full shrink-0 ${dr.status === 'approved' ? 'bg-emerald-100 text-emerald-700' : dr.status === 'rejected' ? 'bg-red-100 text-red-600' : 'bg-amber-100 text-amber-700'}`}>
+                        {dr.status.charAt(0).toUpperCase() + dr.status.slice(1)}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm font-mono font-semibold text-neutral-900">{settings.currencySymbol}{(dr.amountCents / 100).toLocaleString('en-US', { minimumFractionDigits: 2 })}</span>
+                      <span className="text-[10px] text-neutral-400">{new Date(dr.createdAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}</span>
+                    </div>
+                    {dr.notes && <div className="text-[10px] text-neutral-500 italic">"{dr.notes}"</div>}
+                    <div className="flex gap-2 pt-1">
+                      <button onClick={() => setViewReceiptUrl(dr.receiptData)} className="flex-1 text-xs border border-neutral-200 rounded-lg py-1.5 hover:bg-neutral-50 cursor-pointer">View Receipt</button>
+                      {dr.status === 'pending' && (
+                        <button onClick={() => { setDepositReviewModal(dr); setDepositReviewNotes(''); setDepositReviewError(null); }}
+                          className="flex-1 text-xs bg-neutral-900 text-white rounded-lg py-1.5 hover:bg-neutral-800 cursor-pointer">Review</button>
+                      )}
+                    </div>
+                  </li>
+                ))}
+              </ul>
+
+              {/* Desktop table */}
+              <div className="hidden md:block overflow-x-auto">
+                <table className="w-full text-left text-xs border-collapse">
+                  <thead>
+                    <tr className="bg-neutral-50 text-neutral-500 text-[10px] uppercase font-semibold border-b border-neutral-150">
+                      <th className="py-3 px-4">Member</th>
+                      <th className="py-3 px-4">Amount</th>
+                      <th className="py-3 px-4">Receipt</th>
+                      <th className="py-3 px-4">Status</th>
+                      <th className="py-3 px-4">Date</th>
+                      <th className="py-3 px-4">Notes</th>
+                      <th className="py-3 px-4"></th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-neutral-100">
+                    {depositRequestsList.map(dr => (
+                      <tr key={dr.id} className="hover:bg-neutral-50/40">
+                        <td className="py-3 px-4">
+                          <div className="font-semibold text-neutral-900">{dr.memberFirstName} {dr.memberLastName}</div>
+                          <div className="text-[10px] font-mono text-neutral-400">{dr.memberEmployeeId}</div>
+                        </td>
+                        <td className="py-3 px-4 font-mono font-semibold text-neutral-900">{settings.currencySymbol}{(dr.amountCents / 100).toLocaleString('en-US', { minimumFractionDigits: 2 })}</td>
+                        <td className="py-3 px-4">
+                          <button onClick={() => setViewReceiptUrl(dr.receiptData)} className="text-xs text-blue-600 hover:underline cursor-pointer">View</button>
+                        </td>
+                        <td className="py-3 px-4">
+                          <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${dr.status === 'approved' ? 'bg-emerald-100 text-emerald-700' : dr.status === 'rejected' ? 'bg-red-100 text-red-600' : 'bg-amber-100 text-amber-700'}`}>
+                            {dr.status.charAt(0).toUpperCase() + dr.status.slice(1)}
+                          </span>
+                        </td>
+                        <td className="py-3 px-4 text-neutral-400 font-mono text-[10px]">{new Date(dr.createdAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}</td>
+                        <td className="py-3 px-4 text-neutral-500 italic text-[11px] max-w-[180px] truncate">{dr.notes || '—'}</td>
+                        <td className="py-3 px-4 text-right">
+                          {dr.status === 'pending' && (
+                            <button onClick={() => { setDepositReviewModal(dr); setDepositReviewNotes(''); setDepositReviewError(null); }}
+                              className="text-xs bg-neutral-900 hover:bg-neutral-800 text-white px-3 py-1.5 rounded-lg cursor-pointer">
+                              Review
+                            </button>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </>
+          )}
+        </div>
+      )}
+
+      {/* Deposit Request Review Modal */}
+      {depositReviewModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6 space-y-4" onClick={e => e.stopPropagation()}>
+            <div>
+              <h2 className="text-sm font-semibold text-neutral-900">Review Deposit Request</h2>
+              <p className="text-xs text-neutral-500 mt-1">
+                {depositReviewModal.memberFirstName} {depositReviewModal.memberLastName} · {settings.currencySymbol}{(depositReviewModal.amountCents / 100).toLocaleString('en-US', { minimumFractionDigits: 2 })}
+              </p>
+            </div>
+
+            {/* Receipt preview */}
+            <div className="rounded-xl border border-neutral-200 overflow-hidden">
+              {depositReviewModal.receiptData?.startsWith('data:image') ? (
+                <img src={depositReviewModal.receiptData} alt="Receipt" className="w-full max-h-56 object-contain bg-neutral-50 cursor-pointer" onClick={() => setViewReceiptUrl(depositReviewModal.receiptData)} />
+              ) : (
+                <div className="p-4 text-center text-xs text-neutral-500">Non-image receipt. <button onClick={() => setViewReceiptUrl(depositReviewModal.receiptData)} className="text-blue-600 underline cursor-pointer">View file</button></div>
+              )}
+            </div>
+
+            {depositReviewError && <div className="p-2.5 bg-red-50 border border-red-200 text-red-600 text-xs rounded-lg">{depositReviewError}</div>}
+
+            <div>
+              <label className="block text-[10px] font-bold uppercase text-neutral-400 mb-1">
+                Notes <span className="normal-case font-normal">(required for rejection, optional for approval)</span>
+              </label>
+              <textarea value={depositReviewNotes} onChange={e => setDepositReviewNotes(e.target.value)} rows={2}
+                placeholder="Add a note for the member..."
+                className="w-full text-xs border border-neutral-200 bg-white rounded-lg p-2.5 focus:outline-none focus:ring-1 focus:ring-neutral-900 placeholder:text-neutral-400 resize-none" />
+            </div>
+
+            <div className="flex gap-3 pt-1">
+              <button onClick={() => setDepositReviewModal(null)}
+                className="flex-1 border border-neutral-200 text-neutral-700 hover:bg-neutral-50 text-xs font-semibold py-2.5 rounded-lg cursor-pointer">Cancel</button>
+              <button onClick={() => handleDepositReview('reject')} disabled={depositReviewing}
+                className="flex-1 bg-red-500 hover:bg-red-600 disabled:opacity-50 text-white text-xs font-semibold py-2.5 rounded-lg cursor-pointer flex items-center justify-center gap-1.5">
+                {depositReviewing ? <Loader className="w-3.5 h-3.5 animate-spin" /> : <XCircle className="w-3.5 h-3.5" />} Reject
+              </button>
+              <button onClick={() => handleDepositReview('approve')} disabled={depositReviewing}
+                className="flex-1 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white text-xs font-semibold py-2.5 rounded-lg cursor-pointer flex items-center justify-center gap-1.5">
+                {depositReviewing ? <Loader className="w-3.5 h-3.5 animate-spin" /> : <CheckCircle className="w-3.5 h-3.5" />} Approve
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Receipt Viewer Modal */}
+      {viewReceiptUrl && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4" onClick={() => setViewReceiptUrl(null)}>
+          <div className="relative max-w-2xl w-full" onClick={e => e.stopPropagation()}>
+            <button onClick={() => setViewReceiptUrl(null)} className="absolute -top-9 right-0 text-white text-xs flex items-center gap-1 cursor-pointer">
+              <X className="w-4 h-4" /> Close
+            </button>
+            <img src={viewReceiptUrl} alt="Receipt" className="w-full rounded-xl object-contain max-h-[80vh]" />
+          </div>
+        </div>
+      )}
 
       {/* POST NEW TRANSACTION MODAL */}
       <AnimatePresence>

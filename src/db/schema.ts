@@ -185,6 +185,25 @@ export const loanApplications = pgTable('loan_applications', {
   updatedAt: timestamp('updated_at').defaultNow().notNull(),
 });
 
+// 17. Deposit Requests
+export const depositRequests = pgTable('deposit_requests', {
+  id: serial('id').primaryKey(),
+  memberId: integer('member_id').references(() => members.id).notNull(),
+  amountCents: integer('amount_cents').notNull(),
+  receiptData: text('receipt_data').notNull(), // base64 data URL
+  status: text('status').default('pending').notNull(), // 'pending' | 'approved' | 'rejected'
+  notes: text('notes'), // admin review note
+  reviewedBy: integer('reviewed_by').references(() => users.id),
+  reviewedAt: timestamp('reviewed_at'),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at').defaultNow().notNull(),
+});
+
+export const depositRequestsRelations = relations(depositRequests, ({ one }) => ({
+  member: one(members, { fields: [depositRequests.memberId], references: [members.id] }),
+  reviewer: one(users, { fields: [depositRequests.reviewedBy], references: [users.id] }),
+}));
+
 // --- Relations Definitions ---
 
 export const usersRelations = relations(users, ({ one, many }) => ({

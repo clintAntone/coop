@@ -22,6 +22,7 @@ import {
   loanApprovalMatrix,
   departments,
   loanApplications,
+  depositRequests,
 } from './src/db/schema.ts';
 import {
   seedChartOfAccounts,
@@ -247,6 +248,19 @@ export async function createApp() {
         purpose TEXT NOT NULL,
         status TEXT NOT NULL DEFAULT 'pending',
         review_notes TEXT,
+        reviewed_by INTEGER REFERENCES users(id),
+        reviewed_at TIMESTAMP,
+        created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMP NOT NULL DEFAULT NOW()
+      );
+
+      CREATE TABLE IF NOT EXISTS deposit_requests (
+        id SERIAL PRIMARY KEY,
+        member_id INTEGER NOT NULL REFERENCES members(id),
+        amount_cents INTEGER NOT NULL,
+        receipt_data TEXT NOT NULL,
+        status TEXT NOT NULL DEFAULT 'pending',
+        notes TEXT,
         reviewed_by INTEGER REFERENCES users(id),
         reviewed_at TIMESTAMP,
         created_at TIMESTAMP NOT NULL DEFAULT NOW(),
@@ -1984,6 +1998,130 @@ export async function createApp() {
     } catch (err: any) {
       res.status(500).json({ error: err.message });
     }
+  });
+
+  // --- DEPOSIT REQUESTS ---
+
+  // Member submits a deposit request
+  app.post('/api/deposit-requests', requireAuth, async (req: AuthRequest, res) => {
+    try {
+      const member = await db.select().from(members).where(eq(members.userId, req.dbUser!.id)).limit(1);
+      if (!member[0]) return res.status(404).json({ error: 'No member profile linked.' });
+
+      const { amountCents, receiptData } = req.body;
+      if (!amountCents || amountCents <= 0) return res.status(400).json({ error: 'Amount must be greater than zero.' });
+      if (!receiptData) return res.status(400).json({ error: 'Receipt image is required.' });
+
+      const [req2] = await db.insert(depositRequests).values({
+        memberId: member[0].id,
+        amountCents,
+        receiptData,
+        status: 'pending',
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      }).returning();
+
+      await db.insert(auditLogs).values({ userId: req.dbUser!.id, action: 'deposit_request_submitted', details: `Member ${member[0].id} submitted deposit request for ${amountCents} cents.` });
+      res.status(201).json(req2);
+    } catch (err: any) { res.status(500).json({ error: err.message }); }
+  });
+
+  // Member views their own deposit requests
+  app.get('/api/deposit-requests/my', requireAuth, async (req: AuthRequest, res) => {
+    try {
+      const member = await db.select().from(members).where(eq(members.userId, req.dbUser!.id)).limit(1);
+      if (!member[0]) return res.json([]);
+      const rows = await db.select().from(depositRequests)
+        .where(eq(depositRequests.memberId, member[0].id))
+        .orderBy(desc(depositRequests.createdAt));
+      res.json(rows);
+    } catch (err: any) { res.status(500).json({ error: err.message }); }
+  });
+
+  // Staff views all deposit requests
+  app.get('/api/deposit-requests', requireAuth, async (req: AuthRequest, res) => {
+    try {
+      const allowed = ['System Admin', 'Manager', 'Accounting Officer', 'Cashier'];
+      if (!allowed.includes(req.dbUser?.role || '')) return res.status(403).json({ error: 'Access denied.' });
+      const rows = await db.select({
+        id: depositRequests.id,
+        amountCents: depositRequests.amountCents,
+        receiptData: depositRequests.receiptData,
+        status: depositRequests.status,
+        notes: depositRequests.notes,
+        reviewedAt: depositRequests.reviewedAt,
+        createdAt: depositRequests.createdAt,
+        memberId: depositRequests.memberId,
+        memberFirstName: members.firstName,
+        memberLastName: members.lastName,
+        memberEmployeeId: members.employeeId,
+        reviewerName: users.displayName,
+      }).from(depositRequests)
+        .leftJoin(members, eq(depositRequests.memberId, members.id))
+        .leftJoin(users, eq(depositRequests.reviewedBy, users.id))
+        .orderBy(desc(depositRequests.createdAt));
+      res.json(rows);
+    } catch (err: any) { res.status(500).json({ error: err.message }); }
+  });
+
+  // Staff approves a deposit request — auto-posts transaction
+  app.put('/api/deposit-requests/:id/approve', requireAuth, async (req: AuthRequest, res) => {
+    try {
+      const allowed = ['System Admin', 'Manager', 'Accounting Officer', 'Cashier'];
+      if (!allowed.includes(req.dbUser?.role || '')) return res.status(403).json({ error: 'Access denied.' });
+
+      const depReq = await db.select().from(depositRequests).where(eq(depositRequests.id, parseInt(req.params.id))).limit(1);
+      if (!depReq[0]) return res.status(404).json({ error: 'Deposit request not found.' });
+      if (depReq[0].status !== 'pending') return res.status(409).json({ error: 'This request has already been reviewed.' });
+
+      const { notes } = req.body;
+
+      // Auto-post the deposit transaction
+      const txn = await createAndPostTransaction(
+        depReq[0].memberId,
+        'deposit',
+        depReq[0].amountCents,
+        `Member self-service deposit (receipt verified). ${notes || ''}`.trim(),
+        req.dbUser!.id,
+      );
+
+      await db.update(depositRequests).set({
+        status: 'approved',
+        notes: notes || null,
+        reviewedBy: req.dbUser!.id,
+        reviewedAt: new Date(),
+        updatedAt: new Date(),
+      }).where(eq(depositRequests.id, depReq[0].id));
+
+      await db.insert(auditLogs).values({ userId: req.dbUser!.id, action: 'deposit_request_approved', details: `Deposit request ${depReq[0].id} approved. Transaction posted.` });
+      res.json({ success: true, transaction: txn });
+    } catch (err: any) { res.status(500).json({ error: err.message }); }
+  });
+
+  // Staff rejects a deposit request
+  app.put('/api/deposit-requests/:id/reject', requireAuth, async (req: AuthRequest, res) => {
+    try {
+      const allowed = ['System Admin', 'Manager', 'Accounting Officer', 'Cashier'];
+      if (!allowed.includes(req.dbUser?.role || '')) return res.status(403).json({ error: 'Access denied.' });
+
+      const depReq = await db.select().from(depositRequests).where(eq(depositRequests.id, parseInt(req.params.id))).limit(1);
+      if (!depReq[0]) return res.status(404).json({ error: 'Deposit request not found.' });
+      if (depReq[0].status !== 'pending') return res.status(409).json({ error: 'This request has already been reviewed.' });
+
+      const { notes } = req.body;
+      if (!notes?.trim()) return res.status(400).json({ error: 'A rejection reason is required.' });
+
+      await db.update(depositRequests).set({
+        status: 'rejected',
+        notes: notes.trim(),
+        reviewedBy: req.dbUser!.id,
+        reviewedAt: new Date(),
+        updatedAt: new Date(),
+      }).where(eq(depositRequests.id, depReq[0].id));
+
+      await db.insert(auditLogs).values({ userId: req.dbUser!.id, action: 'deposit_request_rejected', details: `Deposit request ${depReq[0].id} rejected. Reason: ${notes}` });
+      res.json({ success: true });
+    } catch (err: any) { res.status(500).json({ error: err.message }); }
   });
 
   // --- VITE DEV MIDDLEWARE AND CLIENT SERVING FALLBACKS ---

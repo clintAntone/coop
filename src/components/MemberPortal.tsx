@@ -20,6 +20,9 @@ import {
   PlusCircle,
   Ban,
   RefreshCw,
+  Upload,
+  X,
+  Camera,
 } from 'lucide-react';
 
 interface MemberPortalProps {
@@ -46,6 +49,19 @@ export default function MemberPortal({ currentUser, token, settings }: MemberPor
   const [loanError, setLoanError] = useState<string | null>(null);
   const [loanSuccess, setLoanSuccess] = useState(false);
   const [cancelConfirmId, setCancelConfirmId] = useState<number | null>(null);
+
+  // Deposit request state
+  const [depositRequests, setDepositRequests] = useState<any[]>([]);
+  const [showDepositForm, setShowDepositForm] = useState(false);
+  const [depositAmount, setDepositAmount] = useState('');
+  const [depositReceipt, setDepositReceipt] = useState<string | null>(null);
+  const [depositReceiptName, setDepositReceiptName] = useState('');
+  const [depositSubmitting, setDepositSubmitting] = useState(false);
+  const [depositError, setDepositError] = useState<string | null>(null);
+  const [depositSuccess, setDepositSuccess] = useState(false);
+  const [depositAmountTouched, setDepositAmountTouched] = useState(false);
+  const [depositReceiptMissing, setDepositReceiptMissing] = useState(false);
+  const [viewReceiptUrl, setViewReceiptUrl] = useState<string | null>(null);
 
   useEffect(() => {
     fetchMemberPortalData();
@@ -92,6 +108,10 @@ export default function MemberPortal({ currentUser, token, settings }: MemberPor
       // 4. Fetch member's loan applications
       const resApps = await fetch('/api/loan-applications/my', { headers: { Authorization: `Bearer ${token}` } });
       if (resApps.ok) setMyLoanApps(await resApps.json());
+
+      // 5. Fetch member's deposit requests
+      const resDeposits = await fetch('/api/deposit-requests/my', { headers: { Authorization: `Bearer ${token}` } });
+      if (resDeposits.ok) setDepositRequests(await resDeposits.json());
     } catch (err: any) {
       console.error(err);
       setErrorMessage(err.message);
@@ -152,6 +172,47 @@ export default function MemberPortal({ currentUser, token, settings }: MemberPor
     setCancelConfirmId(null);
   };
 
+  const handleDepositSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setDepositError(null);
+    setDepositAmountTouched(true);
+    const amountCents = Math.round(parseFloat(depositAmount) * 100);
+    if (isNaN(amountCents) || amountCents <= 0) return;
+    if (!depositReceipt) { setDepositReceiptMissing(true); return; }
+    setDepositSubmitting(true);
+    try {
+      const res = await fetch('/api/deposit-requests', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ amountCents, receiptData: depositReceipt }),
+      });
+      if (!res.ok) { const e = await res.json(); throw new Error(e.error); }
+      setDepositSuccess(true);
+      setDepositAmount('');
+      setDepositReceipt(null);
+      setDepositReceiptName('');
+      setDepositAmountTouched(false);
+      setDepositReceiptMissing(false);
+      setShowDepositForm(false);
+      const resDeposits = await fetch('/api/deposit-requests/my', { headers: { Authorization: `Bearer ${token}` } });
+      if (resDeposits.ok) setDepositRequests(await resDeposits.json());
+      setTimeout(() => setDepositSuccess(false), 5000);
+    } catch (err: any) {
+      setDepositError(err.message);
+    } finally {
+      setDepositSubmitting(false);
+    }
+  };
+
+  const handleReceiptUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.size > 5 * 1024 * 1024) { setDepositError('Receipt image must be under 5MB.'); return; }
+    const reader = new FileReader();
+    reader.onload = () => { setDepositReceipt(reader.result as string); setDepositReceiptName(file.name); };
+    reader.readAsDataURL(file);
+  };
+
   if (isLoading) {
     return (
       <div className="flex-grow p-8 flex flex-col items-center justify-center gap-3 h-screen">
@@ -210,7 +271,12 @@ export default function MemberPortal({ currentUser, token, settings }: MemberPor
             className="flex items-center gap-2 border border-neutral-200 hover:bg-neutral-50 text-neutral-700 text-xs font-semibold py-1.5 px-3 rounded-lg shadow-sm cursor-pointer"
           >
             <Printer className="w-3.5 h-3.5" />
-            <span>Print Ledger</span>
+            <span className="hidden sm:inline">Print Ledger</span>
+          </button>
+          <button onClick={() => { setShowDepositForm(true); setDepositError(null); }}
+            className="flex items-center gap-1.5 bg-neutral-900 hover:bg-neutral-800 text-white text-xs font-semibold py-1.5 px-3 rounded-lg cursor-pointer transition-colors">
+            <PlusCircle className="w-3.5 h-3.5" />
+            <span className="hidden sm:inline">Request Deposit</span>
           </button>
         </div>
       </div>
@@ -496,7 +562,191 @@ export default function MemberPortal({ currentUser, token, settings }: MemberPor
             </div>
           )}
         </div>
+
+        {/* Deposit Requests Section */}
+        <div className="space-y-4 print:hidden">
+          {depositSuccess && (
+            <div className="flex items-center gap-2 p-3 bg-emerald-50 border border-emerald-200 rounded-xl text-xs text-emerald-700">
+              <CheckCircle className="w-4 h-4 shrink-0" />
+              Deposit request submitted! It will be reviewed by an accounting officer.
+            </div>
+          )}
+
+          {/* Deposit Request Modal */}
+          {showDepositForm && (
+            <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm p-0 sm:p-4">
+              <form onSubmit={handleDepositSubmit}
+                className="bg-white w-full sm:max-w-md sm:rounded-2xl rounded-t-2xl shadow-2xl overflow-hidden flex flex-col max-h-[92vh]">
+                {/* Modal Header */}
+                <div className="flex items-center justify-between px-5 py-4 border-b border-neutral-100">
+                  <div className="flex items-center gap-2.5">
+                    <div className="w-8 h-8 rounded-xl bg-neutral-900 flex items-center justify-center shrink-0">
+                      <PlusCircle className="w-4 h-4 text-white" />
+                    </div>
+                    <div>
+                      <h2 className="text-sm font-semibold text-neutral-900">Request Deposit</h2>
+                      <p className="text-[10px] text-neutral-400">Submit a deposit with proof of receipt for admin approval.</p>
+                    </div>
+                  </div>
+                  <button type="button"
+                    onClick={() => { setShowDepositForm(false); setDepositError(null); setDepositReceipt(null); setDepositReceiptName(''); setDepositAmount(''); setDepositAmountTouched(false); setDepositReceiptMissing(false); }}
+                    className="p-1.5 rounded-full hover:bg-neutral-100 text-neutral-400 hover:text-black transition-colors cursor-pointer">
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+
+                {/* Modal Body */}
+                <div className="flex-1 overflow-y-auto px-5 py-4 space-y-4">
+                  {depositError && (
+                    <div className="flex items-center gap-2 text-xs text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2.5">
+                      <XCircle className="w-3.5 h-3.5 shrink-0" /> {depositError}
+                    </div>
+                  )}
+
+                  {/* Amount */}
+                  <div>
+                    <label className="block text-[10px] font-bold uppercase text-neutral-400 mb-1.5">
+                      Deposit Amount ({settings.currencySymbol}) <span className="text-red-400">*</span>
+                    </label>
+                    <div className="relative">
+                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-neutral-400 font-mono">{settings.currencySymbol}</span>
+                      <input type="number" value={depositAmount}
+                        onChange={e => { setDepositAmount(e.target.value); setDepositAmountTouched(true); }}
+                        onBlur={() => setDepositAmountTouched(true)}
+                        min="0.01" step="0.01" autoFocus
+                        className={`w-full text-sm rounded-xl pl-8 pr-4 py-3 focus:outline-none focus:ring-2 font-mono border ${
+                          depositAmountTouched && (!depositAmount || parseFloat(depositAmount) <= 0)
+                            ? 'border-red-300 bg-red-50 focus:ring-red-300'
+                            : depositAmount && parseFloat(depositAmount) > 0
+                              ? 'border-emerald-300 bg-white focus:ring-emerald-400'
+                              : 'border-neutral-200 bg-white focus:ring-neutral-900'
+                        }`}
+                        placeholder="0.00" />
+                    </div>
+                    {depositAmountTouched && (!depositAmount || parseFloat(depositAmount) <= 0) && (
+                      <p className="text-[10px] text-red-500 mt-1 flex items-center gap-1">
+                        <XCircle className="w-3 h-3" /> Amount must be greater than zero.
+                      </p>
+                    )}
+                    {depositAmount && parseFloat(depositAmount) > 0 && (
+                      <p className="text-[10px] text-emerald-600 mt-1 flex items-center gap-1">
+                        <CheckCircle className="w-3 h-3" />
+                        {settings.currencySymbol}{parseFloat(depositAmount).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} will be requested for deposit.
+                      </p>
+                    )}
+                  </div>
+
+                  {/* Receipt upload */}
+                  <div>
+                    <label className="block text-[10px] font-bold uppercase text-neutral-400 mb-1.5">
+                      Deposit Slip / Receipt <span className="text-red-400">*</span>
+                    </label>
+
+                    {/* Two buttons: Upload file OR Take photo */}
+                    {!depositReceipt && (
+                      <div className="grid grid-cols-2 gap-2">
+                        <label className={`flex flex-col items-center gap-2 p-4 border-2 border-dashed rounded-xl cursor-pointer hover:border-neutral-400 hover:bg-neutral-50 transition-colors ${depositReceiptMissing ? 'border-red-300 bg-red-50' : 'border-neutral-200'}`}>
+                          <input type="file" accept="image/*,application/pdf" className="sr-only" onChange={e => { handleReceiptUpload(e); setDepositReceiptMissing(false); }} />
+                          <Upload className={`w-5 h-5 ${depositReceiptMissing ? 'text-red-400' : 'text-neutral-400'}`} />
+                          <span className="text-xs font-medium text-neutral-600 text-center leading-tight">Upload File<br/><span className="text-[10px] font-normal text-neutral-400">JPG, PNG, PDF</span></span>
+                        </label>
+                        <label className={`flex flex-col items-center gap-2 p-4 border-2 border-dashed rounded-xl cursor-pointer hover:border-neutral-400 hover:bg-neutral-50 transition-colors ${depositReceiptMissing ? 'border-red-300 bg-red-50' : 'border-neutral-200'}`}>
+                          <input type="file" accept="image/*" capture="environment" className="sr-only" onChange={e => { handleReceiptUpload(e); setDepositReceiptMissing(false); }} />
+                          <Camera className={`w-5 h-5 ${depositReceiptMissing ? 'text-red-400' : 'text-neutral-400'}`} />
+                          <span className="text-xs font-medium text-neutral-600 text-center leading-tight">Take Photo<br/><span className="text-[10px] font-normal text-neutral-400">Use camera</span></span>
+                        </label>
+                      </div>
+                    )}
+                    {depositReceiptMissing && !depositReceipt && (
+                      <p className="text-[10px] text-red-500 mt-1.5 flex items-center gap-1">
+                        <XCircle className="w-3 h-3" /> Please attach a receipt or deposit slip.
+                      </p>
+                    )}
+
+                    {/* Preview once uploaded */}
+                    {depositReceipt && (
+                      <div className="relative">
+                        {depositReceipt.startsWith('data:image') ? (
+                          <img src={depositReceipt} alt="Receipt preview"
+                            className="w-full max-h-52 rounded-xl border border-neutral-200 object-contain bg-neutral-50" />
+                        ) : (
+                          <div className="flex items-center gap-3 p-3 border border-neutral-200 rounded-xl bg-neutral-50">
+                            <FileText className="w-5 h-5 text-neutral-400 shrink-0" />
+                            <span className="text-xs text-neutral-700 truncate">{depositReceiptName}</span>
+                          </div>
+                        )}
+                        <button type="button"
+                          onClick={() => { setDepositReceipt(null); setDepositReceiptName(''); }}
+                          className="absolute top-2 right-2 bg-white border border-neutral-200 rounded-full p-1 shadow-sm hover:bg-red-50 hover:border-red-200 cursor-pointer transition-colors">
+                          <X className="w-3 h-3 text-neutral-500 hover:text-red-500" />
+                        </button>
+                        <p className="text-[10px] text-emerald-600 mt-1.5 flex items-center gap-1">
+                          <CheckCircle className="w-3 h-3" /> {depositReceiptName || 'Receipt attached'}
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Modal Footer */}
+                <div className="px-5 py-4 border-t border-neutral-100 flex gap-3">
+                  <button type="button"
+                    onClick={() => { setShowDepositForm(false); setDepositError(null); setDepositReceipt(null); setDepositReceiptName(''); setDepositAmount(''); setDepositAmountTouched(false); setDepositReceiptMissing(false); }}
+                    className="flex-1 border border-neutral-200 text-neutral-700 hover:bg-neutral-50 text-xs font-semibold py-3 rounded-xl cursor-pointer transition-colors">
+                    Cancel
+                  </button>
+                  <button type="submit" disabled={depositSubmitting || !depositReceipt}
+                    className="flex-1 bg-neutral-900 hover:bg-neutral-800 disabled:bg-neutral-300 text-white text-xs font-semibold py-3 rounded-xl cursor-pointer transition-colors flex items-center justify-center gap-2">
+                    {depositSubmitting
+                      ? <><Loader className="w-3.5 h-3.5 animate-spin" /> Submitting...</>
+                      : <><PlusCircle className="w-3.5 h-3.5" /> Submit Request</>}
+                  </button>
+                </div>
+              </form>
+            </div>
+          )}
+
+          {/* Past deposit requests */}
+          {depositRequests.length > 0 && (
+            <div className="border border-neutral-200 rounded-xl overflow-hidden bg-white">
+              <div className="px-4 py-3 border-b border-neutral-100 bg-neutral-50/50">
+                <span className="text-[10px] font-bold uppercase text-neutral-400 tracking-wider">Your Deposit History</span>
+              </div>
+              <ul className="divide-y divide-neutral-100">
+                {depositRequests.map(dr => (
+                  <li key={dr.id} className="flex items-center justify-between px-4 py-3 gap-3">
+                    <div className="min-w-0">
+                      <div className="text-sm font-semibold text-neutral-900 font-mono">{settings.currencySymbol}{(dr.amountCents / 100).toLocaleString('en-US', { minimumFractionDigits: 2 })}</div>
+                      <div className="text-[10px] text-neutral-400 mt-0.5">{new Date(dr.createdAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}</div>
+                      {dr.notes && dr.status === 'rejected' && <div className="text-[10px] text-red-500 mt-0.5 italic">"{dr.notes}"</div>}
+                    </div>
+                    <div className="flex items-center gap-2 shrink-0">
+                      <button onClick={() => setViewReceiptUrl(dr.receiptData)} className="text-[10px] text-neutral-400 hover:text-neutral-700 underline cursor-pointer">View Receipt</button>
+                      <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${
+                        dr.status === 'approved' ? 'bg-emerald-100 text-emerald-700' :
+                        dr.status === 'rejected' ? 'bg-red-100 text-red-600' :
+                        'bg-amber-100 text-amber-700'
+                      }`}>{dr.status.charAt(0).toUpperCase() + dr.status.slice(1)}</span>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+        </div>
       </div>
+
+      {/* Receipt Viewer Modal */}
+      {viewReceiptUrl && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4" onClick={() => setViewReceiptUrl(null)}>
+          <div className="relative max-w-2xl w-full" onClick={e => e.stopPropagation()}>
+            <button onClick={() => setViewReceiptUrl(null)} className="absolute -top-10 right-0 text-white text-xs flex items-center gap-1 cursor-pointer">
+              <X className="w-4 h-4" /> Close
+            </button>
+            <img src={viewReceiptUrl} alt="Receipt" className="w-full rounded-xl object-contain max-h-[80vh]" />
+          </div>
+        </div>
+      )}
 
       {/* Cancel Loan Confirmation Modal */}
       {cancelConfirmId !== null && (
