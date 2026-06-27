@@ -23,13 +23,22 @@ export default function App() {
   const [mountedTabs, setMountedTabs] = useState<Set<string>>(new Set(['members']));
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
-  // Password recovery state — set when Supabase fires PASSWORD_RECOVERY event
+  // Password recovery (reset link flow)
   const [showPasswordReset, setShowPasswordReset] = useState(false);
   const [resetNewPw, setResetNewPw] = useState('');
   const [resetConfirmPw, setResetConfirmPw] = useState('');
   const [resetLoading, setResetLoading] = useState(false);
   const [resetError, setResetError] = useState<string | null>(null);
   const [resetDone, setResetDone] = useState(false);
+
+  // Forced first-login password change (admin-created accounts)
+  const [showMustChange, setShowMustChange] = useState(false);
+  const [mustChangeNewPw, setMustChangeNewPw] = useState('');
+  const [mustChangeConfirmPw, setMustChangeConfirmPw] = useState('');
+  const [mustChangeLoading, setMustChangeLoading] = useState(false);
+  const [mustChangeError, setMustChangeError] = useState<string | null>(null);
+
+
 
   const navigateTo = (tab: string) => {
     setMountedTabs(prev => new Set([...prev, tab]));
@@ -136,7 +145,6 @@ export default function App() {
 
       const { data: { subscription } } = supabaseClient.auth.onAuthStateChange((event, session) => {
         if (event === 'PASSWORD_RECOVERY') {
-          // User clicked a password-reset link — show the reset form, don't log them in yet
           setShowPasswordReset(true);
           setIsLoading(false);
           return;
@@ -204,7 +212,9 @@ export default function App() {
       localStorage.setItem('coop_authToken', token);
       localStorage.setItem('coop_currentUser', JSON.stringify(syncUser));
 
-      if (syncUser.role === 'Member') {
+      if (syncUser.mustChangePassword) {
+        setShowMustChange(true);
+      } else if (syncUser.role === 'Member') {
         navigateTo('portal');
       } else {
         navigateTo('members');
@@ -314,6 +324,37 @@ export default function App() {
     }
   };
 
+  const handleMustChangePassword = async () => {
+    setMustChangeError(null);
+    if (mustChangeNewPw !== mustChangeConfirmPw) { setMustChangeError('Passwords do not match.'); return; }
+    if (mustChangeNewPw.length < 6) { setMustChangeError('Password must be at least 6 characters.'); return; }
+    setMustChangeLoading(true);
+    try {
+      const supabase = getSupabaseClient();
+      if (!supabase) throw new Error('Supabase not configured.');
+      const { error } = await supabase.auth.updateUser({ password: mustChangeNewPw });
+      if (error) throw error;
+      // Clear the flag in local DB
+      await fetch('/api/me/clear-mustchange', {
+        method: 'PUT',
+        headers: { Authorization: `Bearer ${authToken}` },
+      });
+      setShowMustChange(false);
+      setMustChangeNewPw('');
+      setMustChangeConfirmPw('');
+      // Update stored user to reflect mustChangePassword = false
+      const updatedUser = { ...currentUser!, mustChangePassword: false };
+      setCurrentUser(updatedUser);
+      localStorage.setItem('coop_currentUser', JSON.stringify(updatedUser));
+      if (updatedUser.role === 'Member') navigateTo('portal');
+      else navigateTo('members');
+    } catch (err: any) {
+      setMustChangeError(err.message || 'Failed to update password.');
+    } finally {
+      setMustChangeLoading(false);
+    }
+  };
+
   /**
    * Fast Development Swap to inspect downstream UX of other accounts instantly.
    */
@@ -355,6 +396,49 @@ export default function App() {
       }
     }
   };
+
+  if (showMustChange) {
+    return (
+      <div className="min-h-screen bg-neutral-50 flex items-center justify-center p-4">
+        <div className="w-full max-w-sm bg-white border border-neutral-200 rounded-xl shadow-xl p-6 space-y-5">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-amber-50 border border-amber-200 flex items-center justify-center shrink-0">
+              <KeyRound className="w-5 h-5 text-amber-600" />
+            </div>
+            <div>
+              <h2 className="text-sm font-semibold text-neutral-900">Set Your Password</h2>
+              <p className="text-xs text-neutral-500">You must change your temporary password before continuing.</p>
+            </div>
+          </div>
+          {mustChangeError && (
+            <div className="p-3 bg-red-50 border border-red-200 text-red-600 text-xs rounded-lg flex items-start gap-2">
+              <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0" />
+              {mustChangeError}
+            </div>
+          )}
+          <div className="space-y-3">
+            <div>
+              <label className="block text-[10px] font-bold uppercase text-neutral-400 mb-1">New Password</label>
+              <input type="password" value={mustChangeNewPw} onChange={e => setMustChangeNewPw(e.target.value)}
+                className="w-full text-sm border border-neutral-200 rounded-lg px-3 py-2.5 focus:outline-none focus:ring-1 focus:ring-neutral-900 placeholder:text-neutral-300"
+                placeholder="At least 6 characters" />
+            </div>
+            <div>
+              <label className="block text-[10px] font-bold uppercase text-neutral-400 mb-1">Confirm Password</label>
+              <input type="password" value={mustChangeConfirmPw} onChange={e => setMustChangeConfirmPw(e.target.value)}
+                className="w-full text-sm border border-neutral-200 rounded-lg px-3 py-2.5 focus:outline-none focus:ring-1 focus:ring-neutral-900 placeholder:text-neutral-300"
+                placeholder="Repeat new password" />
+            </div>
+          </div>
+          <button onClick={handleMustChangePassword} disabled={mustChangeLoading || !mustChangeNewPw || !mustChangeConfirmPw}
+            className="w-full bg-neutral-900 hover:bg-neutral-800 disabled:bg-neutral-300 text-white text-sm font-semibold py-2.5 rounded-lg cursor-pointer transition-colors flex items-center justify-center gap-2">
+            {mustChangeLoading ? <Loader className="w-4 h-4 animate-spin" /> : <KeyRound className="w-4 h-4" />}
+            {mustChangeLoading ? 'Saving…' : 'Set Password & Continue'}
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   if (showPasswordReset) {
     return (

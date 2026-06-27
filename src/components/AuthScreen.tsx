@@ -183,15 +183,12 @@ export default function AuthScreen({ onMockLogin, onPinLogin, isLoading, errorMs
     if (!forgotEmail) return;
     setForgotLoading(true);
     try {
-      const res = await fetch('/api/auth/forgot-password', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: forgotEmail.trim() }),
+      const supabase = getSupabaseClient();
+      if (!supabase) throw new Error('Supabase not configured.');
+      const { error } = await supabase.auth.resetPasswordForEmail(forgotEmail.trim(), {
+        redirectTo: window.location.origin,
       });
-      if (!res.ok) {
-        const data = await res.json();
-        throw new Error(data.error || 'Failed to send reset email.');
-      }
+      if (error) throw error;
       setForgotSent(true);
     } catch (err: any) {
       setForgotError(err.message || 'Failed to send reset email.');

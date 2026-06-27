@@ -74,8 +74,6 @@ export default function UsersModule({ currentUser, token }: UsersModuleProps) {
   const [createdPinInfo, setCreatedPinInfo] = useState<{ name: string; email: string; pin: string } | null>(null);
   const [pinCopied, setPinCopied] = useState(false);
   const [statusConfirm, setStatusConfirm] = useState<{ userId: number; currentStatus: boolean; userName: string } | null>(null);
-  const [invitingUserId, setInvitingUserId] = useState<number | null>(null);
-  const [inviteFlash, setInviteFlash] = useState<{ userId: number; msg: string; ok: boolean } | null>(null);
 
   const generatePin = () => {
     const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789';
@@ -175,24 +173,6 @@ export default function UsersModule({ currentUser, token }: UsersModuleProps) {
       setErrorMessage(err.message);
     } finally {
       setUpdatingUserId(null);
-    }
-  };
-
-  const handleSendInvite = async (userId: number) => {
-    setInvitingUserId(userId);
-    try {
-      const res = await fetch(`/api/users/${userId}/invite`, {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error);
-      setInviteFlash({ userId, msg: 'Invite email sent!', ok: true });
-    } catch (err: any) {
-      setInviteFlash({ userId, msg: err.message, ok: false });
-    } finally {
-      setInvitingUserId(null);
-      setTimeout(() => setInviteFlash(null), 4000);
     }
   };
 
@@ -384,38 +364,26 @@ export default function UsersModule({ currentUser, token }: UsersModuleProps) {
                       )}
                     </div>
 
-                    <div className="shrink-0 flex flex-col items-end gap-1">
+                    <div className="shrink-0">
                       {isUpdating ? (
                         <Loader className="w-4 h-4 text-neutral-400 animate-spin" />
                       ) : isMe ? (
                         <span className="text-[10px] text-neutral-400 italic">Protected</span>
                       ) : !user.isActive ? (
                         isAdmin && (
-                          <div className="flex flex-col items-end gap-1">
-                            {user.pendingEmployeeId ? (
-                              <button onClick={() => handleQuickApprove(user)}
-                                className="flex items-center gap-1 bg-neutral-900 text-white text-[11px] font-semibold py-1.5 px-3 rounded-lg cursor-pointer">
-                                <UserCheck2 className="w-3.5 h-3.5" />
-                                <span>Approve</span>
-                              </button>
-                            ) : (
-                              <button onClick={() => openLinkModal(user)}
-                                className="flex items-center gap-1 border border-neutral-300 text-neutral-700 text-[11px] font-semibold py-1.5 px-3 rounded-lg cursor-pointer">
-                                <Link2 className="w-3.5 h-3.5" />
-                                <span>Link & Approve</span>
-                              </button>
-                            )}
-                            {user.uid.startsWith('pre-reg:') && (
-                              <button onClick={() => handleSendInvite(user.id)} disabled={invitingUserId === user.id}
-                                className="flex items-center gap-1 border border-blue-200 text-blue-600 text-[11px] font-semibold py-1.5 px-3 rounded-lg cursor-pointer disabled:opacity-50">
-                                {invitingUserId === user.id ? <Loader className="w-3.5 h-3.5 animate-spin" /> : <UserPlus className="w-3.5 h-3.5" />}
-                                <span>Send Invite</span>
-                              </button>
-                            )}
-                            {inviteFlash?.userId === user.id && (
-                              <span className={`text-[10px] font-medium ${inviteFlash.ok ? 'text-green-600' : 'text-red-500'}`}>{inviteFlash.msg}</span>
-                            )}
-                          </div>
+                          user.pendingEmployeeId ? (
+                            <button onClick={() => handleQuickApprove(user)}
+                              className="flex items-center gap-1 bg-neutral-900 text-white text-[11px] font-semibold py-1.5 px-3 rounded-lg cursor-pointer">
+                              <UserCheck2 className="w-3.5 h-3.5" />
+                              <span>Approve</span>
+                            </button>
+                          ) : (
+                            <button onClick={() => openLinkModal(user)}
+                              className="flex items-center gap-1 border border-neutral-300 text-neutral-700 text-[11px] font-semibold py-1.5 px-3 rounded-lg cursor-pointer">
+                              <Link2 className="w-3.5 h-3.5" />
+                              <span>Link & Approve</span>
+                            </button>
+                          )
                         )
                       ) : (
                         <button onClick={() => setStatusConfirm({ userId: user.id, currentStatus: user.isActive, userName: user.displayName || user.email })}
@@ -504,33 +472,19 @@ export default function UsersModule({ currentUser, token }: UsersModuleProps) {
                           ) : !user.isActive ? (
                             <div className="flex items-center justify-end gap-2 flex-wrap">
                               {isAdmin && (
-                                <>
-                                  {user.pendingEmployeeId ? (
-                                    <button onClick={() => handleQuickApprove(user)}
-                                      className="flex items-center gap-1 bg-neutral-900 border border-neutral-800 text-white hover:bg-neutral-800 text-[11px] font-semibold py-1 px-3 rounded-md shadow-sm transition-colors cursor-pointer">
-                                      <UserCheck2 className="w-3.5 h-3.5" />
-                                      <span>Approve</span>
-                                    </button>
-                                  ) : (
-                                    <button onClick={() => openLinkModal(user)}
-                                      className="flex items-center gap-1 border border-neutral-300 text-neutral-700 hover:bg-neutral-50 text-[11px] font-semibold py-1 px-3 rounded-md transition-colors cursor-pointer">
-                                      <Link2 className="w-3.5 h-3.5" />
-                                      <span>Link & Approve</span>
-                                    </button>
-                                  )}
-                                  {user.uid.startsWith('pre-reg:') && (
-                                    <div className="flex items-center gap-1.5">
-                                      <button onClick={() => handleSendInvite(user.id)} disabled={invitingUserId === user.id}
-                                        className="flex items-center gap-1 border border-blue-200 text-blue-600 hover:bg-blue-50 text-[11px] font-semibold py-1 px-3 rounded-md transition-colors cursor-pointer disabled:opacity-50">
-                                        {invitingUserId === user.id ? <Loader className="w-3.5 h-3.5 animate-spin" /> : <UserPlus className="w-3.5 h-3.5" />}
-                                        <span>Send Invite</span>
-                                      </button>
-                                      {inviteFlash?.userId === user.id && (
-                                        <span className={`text-[10px] font-medium whitespace-nowrap ${inviteFlash.ok ? 'text-green-600' : 'text-red-500'}`}>{inviteFlash.msg}</span>
-                                      )}
-                                    </div>
-                                  )}
-                                </>
+                                user.pendingEmployeeId ? (
+                                  <button onClick={() => handleQuickApprove(user)}
+                                    className="flex items-center gap-1 bg-neutral-900 border border-neutral-800 text-white hover:bg-neutral-800 text-[11px] font-semibold py-1 px-3 rounded-md shadow-sm transition-colors cursor-pointer">
+                                    <UserCheck2 className="w-3.5 h-3.5" />
+                                    <span>Approve</span>
+                                  </button>
+                                ) : (
+                                  <button onClick={() => openLinkModal(user)}
+                                    className="flex items-center gap-1 border border-neutral-300 text-neutral-700 hover:bg-neutral-50 text-[11px] font-semibold py-1 px-3 rounded-md transition-colors cursor-pointer">
+                                    <Link2 className="w-3.5 h-3.5" />
+                                    <span>Link & Approve</span>
+                                  </button>
+                                )
                               )}
                             </div>
                           ) : (

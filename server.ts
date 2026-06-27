@@ -503,78 +503,6 @@ export async function createApp() {
     }
   });
 
-  // Password reset — generate Supabase recovery link via admin API and send via Resend
-  app.post('/api/auth/forgot-password', async (req, res) => {
-    try {
-      const { email } = req.body;
-      if (!email || typeof email !== 'string' || !email.includes('@')) {
-        return res.status(400).json({ error: 'Valid email is required.' });
-      }
-      const normalizedEmail = email.trim().toLowerCase();
-
-      const supabaseUrl = (process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || '').replace(/\/$/, '');
-      const serviceKey = (process.env.SUPABASE_SERVICE_ROLE_KEY || '').trim();
-      if (!supabaseUrl || !serviceKey || serviceKey.startsWith('your-')) {
-        return res.status(503).json({ error: 'Password reset is not configured on this server.' });
-      }
-
-      const adminClient = createSupabaseClient(supabaseUrl, serviceKey, {
-        auth: { autoRefreshToken: false, persistSession: false },
-      });
-
-      // Generate a recovery link without sending Supabase's own email
-      const { data, error } = await adminClient.auth.admin.generateLink({
-        type: 'recovery',
-        email: normalizedEmail,
-        options: { redirectTo: (process.env.APP_URL || process.env.VITE_APP_URL || '').replace(/\/$/, '') || supabaseUrl },
-      });
-      if (error) throw new Error(error.message);
-
-      const resetLink = data.properties?.action_link;
-      if (!resetLink) throw new Error('Failed to generate reset link.');
-
-      // Send via Resend
-      const apiKey = process.env.RESEND_API_KEY;
-      if (!apiKey) {
-        console.warn('RESEND_API_KEY not set — cannot send password reset email.');
-        return res.status(503).json({ error: 'Email service is not configured on this server.' });
-      }
-
-      const settingsRows = await db.select().from(appSettings).limit(1);
-      const appName = settingsRows[0]?.value && typeof settingsRows[0].value === 'object'
-        ? (settingsRows[0].value as any).app_name || 'Cooperative'
-        : 'Cooperative';
-
-      const resend = new Resend(apiKey);
-      await resend.emails.send({
-        from: process.env.RESEND_FROM_EMAIL || `${appName} <onboarding@resend.dev>`,
-        to: normalizedEmail,
-        subject: `Reset your ${appName} password`,
-        html: `
-          <div style="font-family:sans-serif;max-width:480px;margin:0 auto;padding:24px;">
-            <h2 style="margin-bottom:4px;">${appName}</h2>
-            <p style="color:#666;margin-top:0;">Password Reset Request</p>
-            <hr style="border:none;border-top:1px solid #eee;margin:16px 0;" />
-            <p>We received a request to reset your password. Click the button below to choose a new one.</p>
-            <p style="text-align:center;margin:24px 0;">
-              <a href="${resetLink}" style="background:#111;color:#fff;text-decoration:none;padding:12px 28px;border-radius:8px;font-weight:600;font-size:14px;">
-                Reset Password
-              </a>
-            </p>
-            <p style="color:#999;font-size:12px;">This link expires in 1 hour. If you didn't request a password reset, you can safely ignore this email.</p>
-            <p style="color:#ccc;font-size:11px;margin-top:24px;">Automated message from ${appName}.</p>
-          </div>
-        `,
-      });
-
-      res.json({ ok: true });
-    } catch (err: any) {
-      console.error('[forgot-password]', err.message);
-      // Always return success to avoid exposing whether an email is registered
-      res.json({ ok: true });
-    }
-  });
-
   // PIN login for manually-created employee accounts (no Supabase account required)
   app.post('/api/auth/pin-login', async (req, res) => {
     try {
@@ -949,7 +877,7 @@ export async function createApp() {
     }
   });
 
-  // Admin direct-create: create an active user account without self-registration (System Admin only)
+  // Admin direct-create: create an active user account in Supabase Auth + local DB (System Admin only)
   app.post('/api/users/admin-create', requireAuth, async (req: AuthRequest, res) => {
     try {
       if (req.dbUser?.role !== 'System Admin') {
@@ -962,38 +890,74 @@ export async function createApp() {
       if (!tempPin || tempPin.trim().length < 4) {
         return res.status(400).json({ error: 'A temporary PIN of at least 4 digits is required.' });
       }
-      // Check for duplicate email
+
+      // Check for duplicate email in local DB
       const existing = await db.select().from(users).where(eq(users.email, email.toLowerCase().trim())).limit(1);
       if (existing.length > 0) {
         return res.status(409).json({ error: 'An account with this email already exists.' });
       }
-      const uid = `manual:${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-      const hashedPin = crypto.createHash('sha256').update(tempPin.trim() + uid).digest('hex');
+
+      // Create in Supabase Auth so the user appears in Authentication → Users
+      // and can use password reset / standard Supabase login.
+      const supabaseUrl = (process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || '').replace(/\/$/, '');
+      const serviceKey = (process.env.SUPABASE_SERVICE_ROLE_KEY || '').trim();
+      if (!supabaseUrl || !serviceKey) {
+        return res.status(503).json({ error: 'SUPABASE_SERVICE_ROLE_KEY is not configured.' });
+      }
+      const adminClient = createSupabaseClient(supabaseUrl, serviceKey, {
+        auth: { autoRefreshToken: false, persistSession: false },
+      });
+
+      const { data: authData, error: authError } = await adminClient.auth.admin.createUser({
+        email: email.toLowerCase().trim(),
+        password: tempPin.trim(),
+        email_confirm: true, // skip confirmation email — credentials are sent separately
+      });
+      if (authError) throw new Error(authError.message);
+
+      const supabaseUid = authData.user.id;
+
       const [created] = await db.insert(users).values({
-        uid,
+        uid: supabaseUid,
         email: email.toLowerCase().trim(),
         displayName: displayName.trim(),
         role,
         isActive: true,
         employeeIdVerified: false,
         pendingEmployeeId: null,
-        tempPin: hashedPin,
+        tempPin: null,
         mustChangePassword: true,
         createdAt: new Date(),
         updatedAt: new Date(),
       }).returning();
+
       await db.insert(auditLogs).values({
         userId: req.dbUser!.id,
         action: 'admin_create_user',
         details: JSON.stringify({ createdUserId: created.id, displayName, email, role }),
         createdAt: new Date(),
       });
-      // Send credentials email (fire-and-forget — don't fail the request if email fails)
+
+      // Send credentials email (fire-and-forget)
       const settingsRows = await db.select().from(appSettings);
       const settingsMap: Record<string, string> = Object.fromEntries(settingsRows.map(r => [r.key, r.value]));
       const appName = settingsMap['app_name'] || 'Cooperative System';
       sendCredentialsEmail({ toEmail: email.toLowerCase().trim(), employeeName: displayName.trim(), pin: tempPin.trim(), appName }).catch(e => console.error('Credentials email failed:', e));
+
       res.status(201).json(created);
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // Clear mustChangePassword flag after a successful first-login password change
+  app.put('/api/me/clear-mustchange', requireAuth, async (req: AuthRequest, res) => {
+    try {
+      const [updated] = await db.update(users)
+        .set({ mustChangePassword: false, updatedAt: new Date() })
+        .where(eq(users.id, req.dbUser!.id))
+        .returning();
+      res.json(updated);
     } catch (err: any) {
       res.status(500).json({ error: err.message });
     }

@@ -6,6 +6,7 @@ export interface User {
   role: string; // 'System Admin' | 'Manager' | 'Accounting Officer' | 'Cashier' | 'Auditor' | 'Member'
   isActive: boolean;
   employeeIdVerified: boolean;
+  mustChangePassword: boolean;
   avatarUrl: string | null;
   phone: string | null;
   createdAt: string;
