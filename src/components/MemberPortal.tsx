@@ -248,35 +248,37 @@ export default function MemberPortal({ currentUser, token, settings }: MemberPor
   return (
     <div className="flex-grow p-4 md:p-8 overflow-y-auto h-screen print:p-0">
       {/* Top Banner */}
-      <div className="flex items-center justify-between flex-wrap gap-y-2 mb-8 print:hidden">
-        <div>
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-8 print:hidden">
+        <div className="min-w-0">
           <h1 className="text-xl font-medium tracking-tight text-neutral-900 font-sans">
             My Cooperative Account
           </h1>
-          <p className="text-xs text-neutral-400 mt-0.5 hidden sm:block">
+          <p className="text-xs text-neutral-400 mt-0.5">
             Welcome back, {memberDetails.firstName}.
           </p>
         </div>
 
-        <div className="flex items-center gap-2">
-          <button
-            onClick={fetchMemberPortalData}
-            className="p-1.5 border border-neutral-200 hover:bg-neutral-50 rounded-lg transition-colors cursor-pointer"
-            title="Refresh"
-          >
-            <RefreshCw className="w-3.5 h-3.5 text-neutral-500" />
-          </button>
-          <button
-            onClick={handlePrint}
-            className="flex items-center gap-2 border border-neutral-200 hover:bg-neutral-50 text-neutral-700 text-xs font-semibold py-1.5 px-3 rounded-lg shadow-sm cursor-pointer"
-          >
-            <Printer className="w-3.5 h-3.5" />
-            <span className="hidden sm:inline">Print Ledger</span>
-          </button>
+        <div className="flex items-center justify-between sm:justify-end gap-2 shrink-0 sm:self-auto">
+          <div className="flex items-center gap-2">
+            <button
+              onClick={fetchMemberPortalData}
+              className="p-1.5 border border-neutral-200 hover:bg-neutral-50 rounded-lg transition-colors cursor-pointer"
+              title="Refresh"
+            >
+              <RefreshCw className="w-3.5 h-3.5 text-neutral-500" />
+            </button>
+            <button
+              onClick={handlePrint}
+              className="p-1.5 border border-neutral-200 hover:bg-neutral-50 text-neutral-700 rounded-lg shadow-sm cursor-pointer"
+              title="Print Ledger"
+            >
+              <Printer className="w-3.5 h-3.5" />
+            </button>
+          </div>
           <button onClick={() => { setShowDepositForm(true); setDepositError(null); }}
-            className="flex items-center gap-1.5 bg-neutral-900 hover:bg-neutral-800 text-white text-xs font-semibold py-1.5 px-3 rounded-lg cursor-pointer transition-colors">
+            className="flex items-center gap-1.5 bg-neutral-900 hover:bg-neutral-800 text-white text-xs font-semibold py-2 px-3 rounded-lg cursor-pointer transition-colors ml-auto sm:ml-2">
             <PlusCircle className="w-3.5 h-3.5" />
-            <span className="hidden sm:inline">Request Deposit</span>
+            <span>Request Deposit</span>
           </button>
         </div>
       </div>
