@@ -15,7 +15,9 @@ import {
   UserCheck2,
   AlertTriangle,
   RefreshCw,
-  Coins
+  Coins,
+  Download,
+  Printer
 } from 'lucide-react';
 
 interface TransactionsModuleProps {
@@ -29,6 +31,7 @@ export default function TransactionsModule({ currentUser, token, settings }: Tra
   const [membersList, setMembersList] = useState<Member[]>([]);
   const [coaList, setCoaList] = useState<ChartOfAccount[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
+  const [visibleCount, setVisibleCount] = useState(50);
   const [isLoading, setIsLoading] = useState(true);
   const [errMsg, setErrMsg] = useState<string | null>(null);
 
@@ -45,7 +48,7 @@ export default function TransactionsModule({ currentUser, token, settings }: Tra
   const [posting, setPosting] = useState(false);
 
   const closePostingModal = () => {
-    closePostingModal();
+    setShowPostingModal(false);
     setSelectedMemberId('');
     setMemberSearch('');
     setTransactionType('deposit');
@@ -76,6 +79,19 @@ export default function TransactionsModule({ currentUser, token, settings }: Tra
     fetchCOAs();
     fetchDepositRequests();
   }, [token]);
+
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        if (showPostingModal) closePostingModal();
+        if (reversalTarget) { setReversalTarget(null); setReversalReason(''); }
+        if (viewReceiptUrl) setViewReceiptUrl(null);
+        if (depositReviewModal) { setDepositReviewModal(null); setDepositReviewNotes(''); setDepositReviewError(null); }
+      }
+    };
+    document.addEventListener('keydown', handler);
+    return () => document.removeEventListener('keydown', handler);
+  }, [showPostingModal, reversalTarget, viewReceiptUrl, depositReviewModal]);
 
   const fetchTransactions = async () => {
     setIsLoading(true);
@@ -245,6 +261,28 @@ export default function TransactionsModule({ currentUser, token, settings }: Tra
     return matchesName || matchesEmp || matchesRef || matchesType;
   });
 
+  const visibleTxns = filteredTxns.slice(0, visibleCount);
+
+  const exportCsv = () => {
+    const headers = ['Date', 'Reference', 'Member Name', 'Employee ID', 'Type', 'Description', 'Amount', 'Status', 'Posted By'];
+    const rows = filteredTxns.map(txn => [
+      new Date(txn.createdAt).toLocaleString(),
+      txn.referenceNumber,
+      txn.memberName || '',
+      txn.employeeId || '',
+      txn.transactionType,
+      (txn.description || '').replace(/,/g, ' '),
+      (txn.amount / 100).toFixed(2),
+      txn.status,
+      txn.creatorName || 'System',
+    ]);
+    const csv = [headers, ...rows].map(r => r.join(',')).join('\n');
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a'); a.href = url; a.download = `ledger-${Date.now()}.csv`; a.click();
+    URL.revokeObjectURL(url);
+  };
+
   return (
     <div className="flex-grow p-4 md:p-8 overflow-y-auto h-screen">
       {/* Top Controls */}
@@ -300,7 +338,7 @@ export default function TransactionsModule({ currentUser, token, settings }: Tra
               type="text"
               placeholder="Search member, reference..."
               value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
+              onChange={(e) => { setSearchTerm(e.target.value); setVisibleCount(50); }}
               className="w-full text-xs pl-9 pr-4 py-2 border border-neutral-200 rounded-lg bg-white focus:outline-none focus:ring-1 focus:ring-neutral-400 focus:border-neutral-400 text-neutral-800 placeholder-neutral-400"
             />
           </div>
@@ -312,6 +350,20 @@ export default function TransactionsModule({ currentUser, token, settings }: Tra
               title="Refresh ledger"
             >
               <RefreshCw className="w-3.5 h-3.5 text-neutral-500" />
+            </button>
+            <button
+              onClick={exportCsv}
+              title="Export as CSV (Excel)"
+              className="p-2 border border-neutral-200 hover:bg-neutral-50 rounded-lg transition-colors cursor-pointer"
+            >
+              <Download className="w-3.5 h-3.5 text-neutral-500" />
+            </button>
+            <button
+              onClick={() => window.print()}
+              title="Print / Export as PDF"
+              className="p-2 border border-neutral-200 hover:bg-neutral-50 rounded-lg transition-colors cursor-pointer print:hidden"
+            >
+              <Printer className="w-3.5 h-3.5 text-neutral-500" />
             </button>
             <span className="inline-flex items-center gap-1.5 text-[10px] text-neutral-400 font-medium">
               <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 shrink-0" />
@@ -338,7 +390,7 @@ export default function TransactionsModule({ currentUser, token, settings }: Tra
           <>
             {/* Mobile cards */}
             <div className="md:hidden divide-y divide-neutral-100">
-              {filteredTxns.map((txn) => {
+              {visibleTxns.map((txn) => {
                 const date = new Date(txn.createdAt).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
                 const isReversed = txn.status === 'reversed';
                 const canReverse = ['System Admin', 'Manager', 'Accounting Officer'].includes(currentUser.role) && !isReversed && txn.transactionType !== 'reversal';
@@ -400,7 +452,7 @@ export default function TransactionsModule({ currentUser, token, settings }: Tra
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-neutral-150">
-                  {filteredTxns.map((txn) => {
+                  {visibleTxns.map((txn) => {
                     const date = new Date(txn.createdAt).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
                     const isReversed = txn.status === 'reversed';
                     return (
@@ -448,6 +500,16 @@ export default function TransactionsModule({ currentUser, token, settings }: Tra
               </table>
             </div>
           </>
+        )}
+        {visibleCount < filteredTxns.length && (
+          <div className="px-4 py-3 border-t border-neutral-100 flex items-center justify-between text-xs text-neutral-500">
+            <span>Showing {Math.min(visibleCount, filteredTxns.length)} of {filteredTxns.length} entries</span>
+            <button
+              onClick={() => setVisibleCount(v => v + 50)}
+              className="text-xs font-semibold text-neutral-700 hover:text-black border border-neutral-200 hover:bg-neutral-50 rounded-lg px-3 py-1.5 cursor-pointer transition-colors">
+              Show 50 more
+            </button>
+          </div>
         )}
       </div>
       )}
@@ -796,7 +858,7 @@ export default function TransactionsModule({ currentUser, token, settings }: Tra
                   </div>
                 )}
 
-                <div className="pt-4 border-t border-neutral-150 flex items-center justify-end gap-31">
+                <div className="pt-4 border-t border-neutral-150 flex items-center justify-end gap-3">
                   <button
                     type="button"
                     onClick={() => setShowPostingModal(false)}

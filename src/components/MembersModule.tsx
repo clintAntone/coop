@@ -334,6 +334,13 @@ export default function MembersModule({ currentUser, token, settings }: MembersM
               <p className="text-[11px] text-neutral-400">
                 {searchTerm ? 'Refine your search constraints.' : 'Introduce the first cooperative member profile.'}
               </p>
+              {!searchTerm && (
+                <button
+                  onClick={handleOpenCreate}
+                  className="mt-2 flex items-center gap-1.5 bg-neutral-900 hover:bg-neutral-800 text-white text-xs font-semibold py-2 px-4 rounded-lg transition-colors cursor-pointer">
+                  Add First Member
+                </button>
+              )}
             </div>
           ) : activeDrawerMember ? (
             /* Compact list — shown when the detail drawer is open */

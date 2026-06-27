@@ -50,6 +50,11 @@ export default function SettingsGeneral({ token, settings, onSettingsUpdated }: 
   const handleLogoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+    if (file.size > 2 * 1024 * 1024) {
+      setMsg({ type: 'error', text: 'Logo file is too large. Please use an image under 2 MB.' });
+      if (fileInputRef.current) fileInputRef.current.value = '';
+      return;
+    }
     const reader = new FileReader();
     reader.onload = () => setLogoUrl(reader.result as string);
     reader.readAsDataURL(file);
@@ -118,7 +123,7 @@ export default function SettingsGeneral({ token, settings, onSettingsUpdated }: 
                   <X className="w-3 h-3" /> Remove
                 </button>
               )}
-              <p className="text-[10px] text-neutral-400">PNG, JPG, SVG</p>
+              <p className="text-[10px] text-neutral-400">PNG, JPG, SVG · Max 2 MB</p>
             </div>
           </div>
         </Field>

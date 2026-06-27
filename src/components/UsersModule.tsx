@@ -73,7 +73,7 @@ export default function UsersModule({ currentUser, token }: UsersModuleProps) {
   const [createError, setCreateError] = useState<string | null>(null);
   const [createdPinInfo, setCreatedPinInfo] = useState<{ name: string; email: string; pin: string } | null>(null);
   const [pinCopied, setPinCopied] = useState(false);
-  const [statusConfirm, setStatusConfirm] = useState<{ userId: number; currentStatus: boolean } | null>(null);
+  const [statusConfirm, setStatusConfirm] = useState<{ userId: number; currentStatus: boolean; userName: string } | null>(null);
 
   const generatePin = () => {
     const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789';
@@ -307,8 +307,8 @@ export default function UsersModule({ currentUser, token }: UsersModuleProps) {
             </select>
             {(searchTerm || statusFilter !== 'all' || roleFilter !== 'all') && (
               <button onClick={() => { setSearchTerm(''); setStatusFilter('all'); setRoleFilter('all'); }}
-                className="shrink-0 text-[11px] text-neutral-500 hover:text-red-500 border border-neutral-200 hover:border-red-200 rounded-lg px-2.5 py-2 h-9 transition-colors cursor-pointer whitespace-nowrap">
-                Clear
+                className="shrink-0 flex items-center gap-1 text-[11px] text-neutral-500 hover:text-red-500 border border-neutral-200 hover:border-red-200 rounded-lg px-2.5 py-2 h-9 transition-colors cursor-pointer whitespace-nowrap">
+                <XCircle className="w-3.5 h-3.5" />Clear
               </button>
             )}
           </div>
@@ -356,7 +356,7 @@ export default function UsersModule({ currentUser, token }: UsersModuleProps) {
                     <div className="min-w-0">
                       {isAdmin && !isMe ? (
                         <select value={user.role} disabled={isUpdating} onChange={e => handleUpdateRole(user.id, e.target.value)}
-                          className="text-xs bg-neutral-50 text-neutral-800 border border-neutral-200 rounded p-1 font-medium focus:outline-none cursor-pointer">
+                          className="text-xs bg-white text-neutral-800 border border-neutral-200 rounded p-1 font-medium focus:outline-none cursor-pointer">
                           {rolesList.map(r => <option key={r} value={r}>{r}</option>)}
                         </select>
                       ) : (
@@ -386,7 +386,7 @@ export default function UsersModule({ currentUser, token }: UsersModuleProps) {
                           )
                         )
                       ) : (
-                        <button onClick={() => setStatusConfirm({ userId: user.id, currentStatus: user.isActive })}
+                        <button onClick={() => setStatusConfirm({ userId: user.id, currentStatus: user.isActive, userName: user.displayName || user.email })}
                           title="Suspends this user's login access."
                           className="flex items-center gap-1 border border-neutral-200 text-neutral-600 text-[11px] font-semibold py-1.5 px-3 rounded-lg cursor-pointer">
                           <UserX className="w-3.5 h-3.5" />
@@ -489,7 +489,7 @@ export default function UsersModule({ currentUser, token }: UsersModuleProps) {
                             </div>
                           ) : (
                             <button
-                              onClick={() => setStatusConfirm({ userId: user.id, currentStatus: user.isActive })}
+                              onClick={() => setStatusConfirm({ userId: user.id, currentStatus: user.isActive, userName: user.displayName || user.email })}
                               title="Suspends this user's login access. They will be blocked from signing into the system until reactivated."
                               className="flex items-center gap-1 border border-neutral-200 text-neutral-600 hover:bg-red-50 hover:text-red-600 hover:border-red-200 text-[11px] font-semibold py-1 px-3 rounded-md transition-colors cursor-pointer">
                               <UserX className="w-3.5 h-3.5" />
@@ -748,6 +748,7 @@ export default function UsersModule({ currentUser, token }: UsersModuleProps) {
                 <h2 className="text-sm font-semibold text-neutral-900">
                   {statusConfirm.currentStatus ? 'Suspend User?' : 'Reactivate User?'}
                 </h2>
+                <p className="text-xs font-medium text-neutral-700 mt-0.5 truncate">{statusConfirm.userName}</p>
                 <p className="text-xs text-neutral-500 mt-1 leading-relaxed">
                   {statusConfirm.currentStatus
                     ? 'This will block the user from logging in until reactivated.'

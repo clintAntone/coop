@@ -125,7 +125,7 @@ export default function SettingsRoster({ token }: Props) {
       </p>
 
       {employeeIds.length > 0 && (
-        <div className="max-h-64 overflow-y-auto border border-neutral-100 rounded-lg">
+        <div className="max-h-[32rem] overflow-y-auto border border-neutral-100 rounded-lg">
           <table className="w-full text-xs">
             <thead className="bg-neutral-50 text-neutral-400 uppercase text-[10px] sticky top-0">
               <tr>

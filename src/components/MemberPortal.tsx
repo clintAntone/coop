@@ -67,6 +67,18 @@ export default function MemberPortal({ currentUser, token, settings }: MemberPor
     fetchMemberPortalData();
   }, [token]);
 
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        if (showDepositForm) setShowDepositForm(false);
+        if (viewReceiptUrl) setViewReceiptUrl(null);
+        if (cancelConfirmId !== null) setCancelConfirmId(null);
+      }
+    };
+    document.addEventListener('keydown', handler);
+    return () => document.removeEventListener('keydown', handler);
+  }, [showDepositForm, viewReceiptUrl, cancelConfirmId]);
+
   const fetchMemberPortalData = async () => {
     setIsLoading(true);
     setErrorMessage(null);
@@ -275,7 +287,7 @@ export default function MemberPortal({ currentUser, token, settings }: MemberPor
               <Printer className="w-3.5 h-3.5" />
             </button>
           </div>
-          <button onClick={() => { setShowDepositForm(true); setDepositError(null); }}
+          <button onClick={() => { setShowDepositForm(true); setDepositError(null); setDepositAmount(''); setDepositReceipt(null); setDepositReceiptName(''); setDepositAmountTouched(false); setDepositReceiptMissing(false); }}
             className="flex items-center gap-1.5 bg-neutral-900 hover:bg-neutral-800 text-white text-xs font-semibold py-2 px-3 rounded-lg cursor-pointer transition-colors ml-auto sm:ml-2">
             <PlusCircle className="w-3.5 h-3.5" />
             <span>Request Deposit</span>
@@ -417,6 +429,17 @@ export default function MemberPortal({ currentUser, token, settings }: MemberPor
                   );
                 })}
               </tbody>
+              <tfoot>
+                <tr className="bg-neutral-50 border-t-2 border-neutral-200 font-mono font-bold text-[11px]">
+                  <td colSpan={3} className="py-3 px-4 text-right uppercase tracking-wider text-[10px] text-neutral-500">Totals</td>
+                  <td className="py-3 px-4 text-right text-neutral-900">
+                    {settings.currencySymbol}{(ledgerLines.filter(l => l.entryType === 'debit' && l.status !== 'reversed').reduce((s, l) => s + l.amount, 0) / 100).toFixed(2)}
+                  </td>
+                  <td className="py-3 px-4 text-right text-emerald-700">
+                    {settings.currencySymbol}{(ledgerLines.filter(l => l.entryType === 'credit' && l.status !== 'reversed').reduce((s, l) => s + l.amount, 0) / 100).toFixed(2)}
+                  </td>
+                </tr>
+              </tfoot>
             </table></div>
           )}
         </div>
@@ -709,11 +732,13 @@ export default function MemberPortal({ currentUser, token, settings }: MemberPor
           )}
 
           {/* Past deposit requests */}
-          {depositRequests.length > 0 && (
-            <div className="border border-neutral-200 rounded-xl overflow-hidden bg-white">
-              <div className="px-4 py-3 border-b border-neutral-100 bg-neutral-50/50">
-                <span className="text-[10px] font-bold uppercase text-neutral-400 tracking-wider">Your Deposit History</span>
-              </div>
+          <div className="border border-neutral-200 rounded-xl overflow-hidden bg-white">
+            <div className="px-4 py-3 border-b border-neutral-100 bg-neutral-50/50">
+              <span className="text-[10px] font-bold uppercase text-neutral-400 tracking-wider">Your Deposit History</span>
+            </div>
+            {depositRequests.length === 0 ? (
+              <div className="py-8 text-center text-neutral-400 text-xs">No deposit requests yet.</div>
+            ) : (
               <ul className="divide-y divide-neutral-100">
                 {depositRequests.map(dr => (
                   <li key={dr.id} className="flex items-center justify-between px-4 py-3 gap-3">
@@ -733,8 +758,8 @@ export default function MemberPortal({ currentUser, token, settings }: MemberPor
                   </li>
                 ))}
               </ul>
-            </div>
-          )}
+            )}
+          </div>
         </div>
       </div>
 

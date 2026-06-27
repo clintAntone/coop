@@ -293,7 +293,7 @@ export default function AuthScreen({ onMockLogin, onPinLogin, isLoading, errorMs
                     }`}
                     placeholder="Enter your Employee ID"
                     value={employeeId}
-                    onChange={e => setEmployeeId(e.target.value)}
+                    onChange={e => { setEmployeeId(e.target.value); if (e.target.value.trim()) setEmpIdStatus('checking'); else setEmpIdStatus('idle'); }}
                     required
                   />
                   <div className="text-[11px] px-0.5">{empIdHint()}</div>

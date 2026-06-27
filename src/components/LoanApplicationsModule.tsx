@@ -156,7 +156,9 @@ export default function LoanApplicationsModule({ currentUser, token, settings }:
                 const appliedDate = new Date(loanApp.createdAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
                 const monthlyRate = loanApp.loanProductInterestBps ? loanApp.loanProductInterestBps / 10000 : 0;
                 const monthly = loanApp.requestedAmountCents > 0 && loanApp.termMonths > 0
-                  ? (loanApp.requestedAmountCents * monthlyRate) / (1 - Math.pow(1 + monthlyRate, -loanApp.termMonths))
+                  ? monthlyRate > 0
+                    ? (loanApp.requestedAmountCents * monthlyRate) / (1 - Math.pow(1 + monthlyRate, -loanApp.termMonths))
+                    : loanApp.requestedAmountCents / loanApp.termMonths
                   : 0;
                 return (
                   <React.Fragment key={loanApp.id}>
@@ -180,7 +182,8 @@ export default function LoanApplicationsModule({ currentUser, token, settings }:
                       <td className="py-4 px-4 text-right">
                         <div className="flex items-center justify-end gap-2">
                           <button onClick={() => setExpandedId(isExpanded ? null : loanApp.id)}
-                            className="p-1.5 rounded-lg border border-neutral-200 hover:bg-neutral-50 text-neutral-500 cursor-pointer transition-colors">
+                            title={isExpanded ? 'Collapse details' : 'Expand details'}
+                            className="p-1.5 rounded-lg border border-neutral-200 hover:bg-neutral-100 text-neutral-500 cursor-pointer transition-colors">
                             {isExpanded ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
                           </button>
                           {canReview && loanApp.status === 'pending' && (

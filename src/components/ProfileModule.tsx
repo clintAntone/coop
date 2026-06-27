@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { User, Member, AppSettings } from '../types.ts';
 import { safeReadJson } from '../lib/safe-fetch.ts';
 import { getSupabaseClient } from '../lib/supabase.ts';
-import { Loader, Save, Camera, X } from 'lucide-react';
+import { Loader, Save, Camera, X, CheckCircle, XCircle } from 'lucide-react';
 
 interface ProfileModuleProps {
   currentUser: User;
@@ -271,7 +271,7 @@ export default function ProfileModule({ currentUser, token, settings, onProfileU
         {/* Email — read only */}
         <div>
           <label className={labelCls}>
-            Email Address <span className="font-normal text-neutral-400">(managed by Supabase Auth)</span>
+            Email Address
           </label>
           <input
             type="text"
@@ -279,12 +279,14 @@ export default function ProfileModule({ currentUser, token, settings, onProfileU
             disabled
             className="w-full text-sm border border-neutral-100 rounded-lg px-3 py-2 bg-neutral-50 text-neutral-400 cursor-not-allowed"
           />
+          <p className="text-[11px] text-neutral-400 mt-1">Email is managed through your login credentials and cannot be changed here.</p>
         </div>
 
         {msg && (
-          <p className={`text-xs font-medium ${msg.type === 'success' ? 'text-emerald-600' : 'text-red-500'}`}>
+          <div className={`flex items-center gap-1.5 text-xs font-medium ${msg.type === 'success' ? 'text-emerald-600' : 'text-red-500'}`}>
+            {msg.type === 'success' ? <CheckCircle className="w-3.5 h-3.5 shrink-0" /> : <XCircle className="w-3.5 h-3.5 shrink-0" />}
             {msg.text}
-          </p>
+          </div>
         )}
 
         <button

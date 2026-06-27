@@ -14,7 +14,10 @@ import {
   DollarSign,
   Layers,
   Sparkles,
-  Info
+  Info,
+  Download,
+  ChevronUp,
+  ChevronDown
 } from 'lucide-react';
 
 interface ReportsModuleProps {
@@ -33,6 +36,9 @@ export default function ReportsModule({ currentUser, token, settings }: ReportsM
 
   // Search states inside tabs
   const [memberSearch, setMemberSearch] = useState('');
+
+  const [memberSortField, setMemberSortField] = useState<'name' | 'savings' | 'shareCapital' | 'total'>('name');
+  const [memberSortDir, setMemberSortDir] = useState<'asc' | 'desc'>('asc');
 
   useEffect(() => {
     loadTabReport();
@@ -94,6 +100,39 @@ export default function ReportsModule({ currentUser, token, settings }: ReportsM
     const name = `${m.firstName} ${m.lastName}`.toLowerCase();
     return name.includes(term) || m.employeeId.toLowerCase().includes(term) || (m.department || '').toLowerCase().includes(term);
   });
+
+  const sortedMembers = [...filteredMembers].sort((a, b) => {
+    let cmp = 0;
+    if (memberSortField === 'name') cmp = `${a.firstName} ${a.lastName}`.localeCompare(`${b.firstName} ${b.lastName}`);
+    else if (memberSortField === 'savings') cmp = a.savings - b.savings;
+    else if (memberSortField === 'shareCapital') cmp = a.shareCapital - b.shareCapital;
+    else cmp = (a.savings + a.shareCapital) - (b.savings + b.shareCapital);
+    return memberSortDir === 'asc' ? cmp : -cmp;
+  });
+
+  const toggleMemberSort = (field: 'name' | 'savings' | 'shareCapital' | 'total') => {
+    if (memberSortField === field) setMemberSortDir(d => d === 'asc' ? 'desc' : 'asc');
+    else { setMemberSortField(field); setMemberSortDir('asc'); }
+  };
+
+  const exportTrialBalanceCsv = () => {
+    const headers = ['COA Code', 'Account Name', 'Type', 'Normal Balance', 'Gross Debits', 'Gross Credits', 'Net Trial Debit', 'Net Trial Credit'];
+    const rows = trialBalanceList.map(coa => [
+      coa.code,
+      coa.name,
+      coa.type,
+      coa.normalBalance,
+      (coa.debitSum / 100).toFixed(2),
+      (coa.creditSum / 100).toFixed(2),
+      coa.debit > 0 ? (coa.debit / 100).toFixed(2) : '',
+      coa.credit > 0 ? (coa.credit / 100).toFixed(2) : '',
+    ]);
+    const csv = [headers, ...rows].map(r => r.join(',')).join('\n');
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a'); a.href = url; a.download = `trial-balance-${Date.now()}.csv`; a.click();
+    URL.revokeObjectURL(url);
+  };
 
   return (
     <div className="flex-grow p-4 md:p-8 overflow-y-auto h-screen">
@@ -202,16 +241,27 @@ export default function ReportsModule({ currentUser, token, settings }: ReportsM
               <div className="bg-white border border-neutral-200/80 rounded-xl shadow-xl shadow-neutral-200/25 overflow-hidden">
                 <div className="p-4 border-b border-neutral-150 bg-neutral-50/50 flex justify-between items-center">
                   <span className="text-[10px] uppercase font-bold text-neutral-400">Enterprise Chart of accounts</span>
-                  <button
-                    onClick={loadTabReport}
-                    className="p-1 border border-neutral-200 rounded hover:bg-neutral-50 cursor-pointer text-neutral-500 hover:text-black transition-all"
-                  >
-                    <RefreshCw className="w-3.5 h-3.5" />
-                  </button>
+                  <div className="flex items-center gap-1.5">
+                    <button
+                      onClick={exportTrialBalanceCsv}
+                      title="Export Trial Balance as CSV"
+                      className="p-1 border border-neutral-200 rounded hover:bg-neutral-50 cursor-pointer text-neutral-500 hover:text-black transition-all"
+                    >
+                      <Download className="w-3.5 h-3.5" />
+                    </button>
+                    <button
+                      onClick={loadTabReport}
+                      className="p-1 border border-neutral-200 rounded hover:bg-neutral-50 cursor-pointer text-neutral-500 hover:text-black transition-all"
+                    >
+                      <RefreshCw className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
                 </div>
                 {/* Mobile cards — visible below md */}
                 <div className="md:hidden divide-y divide-neutral-150">
-                  {trialBalanceList.map((coa) => (
+                  {trialBalanceList.length === 0 ? (
+                    <div className="py-12 text-center text-neutral-400 text-xs">No transactions posted yet.</div>
+                  ) : trialBalanceList.map((coa) => (
                     <div key={coa.code} className="p-4 space-y-2">
                       <div className="flex items-center justify-between gap-2">
                         <span className="font-mono font-bold text-neutral-500 text-[10px]">{coa.code}</span>
@@ -267,7 +317,9 @@ export default function ReportsModule({ currentUser, token, settings }: ReportsM
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-neutral-150 bg-white">
-                      {trialBalanceList.map((coa) => (
+                      {trialBalanceList.length === 0 ? (
+                        <tr><td colSpan={7} className="py-12 text-center text-neutral-400 text-xs">No transactions posted yet.</td></tr>
+                      ) : trialBalanceList.map((coa) => (
                         <tr key={coa.code} className="hover:bg-neutral-50/50 transition-colors">
                           <td className="py-2.5 px-4 font-mono font-bold text-neutral-500 text-[10px]">
                             {coa.code}
@@ -377,7 +429,9 @@ export default function ReportsModule({ currentUser, token, settings }: ReportsM
                 </div>
                 {/* Mobile cards — visible below md */}
                 <div className="md:hidden divide-y divide-neutral-150">
-                  {filteredMembers.map(m => {
+                  {filteredMembers.length === 0 ? (
+                    <div className="py-12 text-center text-neutral-400 text-xs">No members match your search.</div>
+                  ) : sortedMembers.map(m => {
                     const netSummary = m.savings + m.shareCapital;
                     return (
                       <div key={m.id} className="p-4 space-y-2">
@@ -419,15 +473,25 @@ export default function ReportsModule({ currentUser, token, settings }: ReportsM
                     <thead>
                       <tr className="bg-neutral-50 text-neutral-500 text-[10px] uppercase font-semibold border-b border-neutral-150">
                         <th className="py-2.5 px-4 w-28">Employee ID</th>
-                        <th className="py-2.5 px-4">Member Name</th>
+                        <th className="py-2.5 px-4 cursor-pointer select-none hover:bg-neutral-100/50 transition-colors" onClick={() => toggleMemberSort('name')}>
+                          <span className="flex items-center gap-1">Member Name {memberSortField === 'name' ? (memberSortDir === 'asc' ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />) : null}</span>
+                        </th>
                         <th className="py-2.5 px-4">Department</th>
-                        <th className="py-2.5 px-4 text-right">Savings Ledger (2010)</th>
-                        <th className="py-2.5 px-4 text-right">Share Capital (3010)</th>
-                        <th className="py-2.5 px-4 text-right w-40 bg-neutral-50/10">Summary Balances</th>
+                        <th className="py-2.5 px-4 text-right cursor-pointer select-none hover:bg-neutral-100/50 transition-colors" onClick={() => toggleMemberSort('savings')}>
+                          <span className="flex items-center justify-end gap-1">Savings Ledger (2010) {memberSortField === 'savings' ? (memberSortDir === 'asc' ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />) : null}</span>
+                        </th>
+                        <th className="py-2.5 px-4 text-right cursor-pointer select-none hover:bg-neutral-100/50 transition-colors" onClick={() => toggleMemberSort('shareCapital')}>
+                          <span className="flex items-center justify-end gap-1">Share Capital (3010) {memberSortField === 'shareCapital' ? (memberSortDir === 'asc' ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />) : null}</span>
+                        </th>
+                        <th className="py-2.5 px-4 text-right w-40 bg-neutral-50/10 cursor-pointer select-none hover:bg-neutral-100/50 transition-colors" onClick={() => toggleMemberSort('total')}>
+                          <span className="flex items-center justify-end gap-1">Summary Balances {memberSortField === 'total' ? (memberSortDir === 'asc' ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />) : null}</span>
+                        </th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-neutral-150 bg-white">
-                      {filteredMembers.map(m => {
+                      {filteredMembers.length === 0 ? (
+                        <tr><td colSpan={6} className="py-12 text-center text-neutral-400 text-xs">No members match your search.</td></tr>
+                      ) : sortedMembers.map(m => {
                         const netSummary = m.savings + m.shareCapital;
                         return (
                           <tr key={m.id} className="hover:bg-neutral-50/50 transition-colors">
