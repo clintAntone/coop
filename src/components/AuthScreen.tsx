@@ -101,18 +101,14 @@ export default function AuthScreen({ onMockLogin, onPinLogin, isLoading, errorMs
 
         const { error } = await supabase.auth.signUp({ email, password });
         if (error) throw error;
-        try {
-          const preRes = await fetch('/api/users/pre-register', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ email, employeeId: employeeId.trim() }),
-          });
-          if (!preRes.ok) {
-            const preErr = await preRes.json();
-            throw new Error(preErr.error || 'Pre-registration failed.');
-          }
-        } catch (preErr: any) {
-          console.warn('Pre-register stub failed:', preErr.message);
+        const preRes = await fetch('/api/users/pre-register', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email, employeeId: employeeId.trim() }),
+        });
+        if (!preRes.ok) {
+          const preErr = await preRes.json();
+          throw new Error(preErr.error || 'Pre-registration failed. Please try again.');
         }
         setRegistrationSuccess({ name: empIdFullName });
         setIsRegistering(false);

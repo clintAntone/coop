@@ -338,14 +338,15 @@ export async function createApp() {
   });
 
   // Create a pending stub user record at registration time (unauthenticated).
-  // New flow: employee provides their Employee ID during signup so the admin can
-  // immediately identify who is requesting access — no manual linking needed.
-  // Legacy flow (no employeeId): still supported for backward compatibility.
+  // Employee ID is required — accounts without one cannot be auto-approved by the admin.
   app.post('/api/users/pre-register', async (req, res) => {
     try {
       const { email, employeeId } = req.body;
       if (!email || typeof email !== 'string' || !email.includes('@')) {
         return res.status(400).json({ error: 'Valid email is required.' });
+      }
+      if (!employeeId || typeof employeeId !== 'string' || !employeeId.trim()) {
+        return res.status(400).json({ error: 'Employee ID is required to register.' });
       }
       const normalizedEmail = email.trim().toLowerCase();
       const stubUid = `${PENDING_UID_PREFIX}${normalizedEmail}`;
@@ -359,7 +360,7 @@ export async function createApp() {
       let displayName = normalizedEmail.split('@')[0];
       let pendingEmployeeId: string | null = null;
 
-      // If an employee ID was provided, validate against local roster then HR API
+      // Validate employee ID against local roster then HR API
       if (employeeId) {
         const empIdTrimmed = employeeId.trim();
         const empIdUpper = empIdTrimmed.toUpperCase();
