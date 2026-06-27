@@ -54,6 +54,19 @@ export async function getOrCreateUser(uid: string, email: string, displayName?: 
           .returning();
         return merged[0] as DBUser;
       }
+
+      // 1c. Fallback: check if ANY user with the same email already exists
+      //     (e.g. Supabase issued a second auth UID for the same email due to
+      //     repeated signUp calls). Re-use the existing record instead of creating a duplicate.
+      const emailMatch = await db.select().from(users).where(eq(users.email, email)).limit(1);
+      if (emailMatch.length > 0) {
+        // Update to the latest Supabase UID so future lookups hit path 1 (fast)
+        const merged = await db.update(users)
+          .set({ uid, updatedAt: new Date() })
+          .where(eq(users.id, emailMatch[0].id))
+          .returning();
+        return merged[0] as DBUser;
+      }
     }
 
     // 2. Count only real (non-stub) users to determine if this is the first actual user

@@ -277,20 +277,39 @@ export async function createApp() {
   // Public: validate an employee ID during registration — returns name if found and unclaimed.
   app.get('/api/check-employee-id/:id', async (req, res) => {
     try {
-      const empId = req.params.id.trim();
-      if (!empId) return res.status(400).json({ error: 'Employee ID is required.' });
+      const empIdRaw = req.params.id.trim();
+      if (!empIdRaw) return res.status(400).json({ error: 'Employee ID is required.' });
 
-      // 1. Check HR API (cached) — source of truth for valid employee IDs
+      // Normalise for case-insensitive comparison
+      const empIdUpper = empIdRaw.toUpperCase();
+
+      // --- Source 1: Local CSV roster (valid_employee_ids table) ---
+      // This is the primary source for most deployments. Fetch all and match
+      // case-insensitively so "emp-001" matches "EMP-001".
+      const allLocal = await db.select().from(validEmployeeIds);
+      const localMatch = allLocal.find(e => e.employeeId.toUpperCase() === empIdUpper);
+
+      if (localMatch) {
+        if (localMatch.isClaimed) {
+          return res.json({ found: false, reason: 'already_claimed' });
+        }
+        const fullName = [localMatch.firstName, localMatch.middleName, localMatch.lastName]
+          .filter(Boolean).join(' ');
+        // Return the canonical ID from the DB (preserves original casing)
+        return res.json({ found: true, fullName, employeeId: localMatch.employeeId });
+      }
+
+      // --- Source 2: External HR API (supplemental, used when local roster is not enough) ---
       const hrEmployees = await getHREmployees();
-      const hrEmployee = hrEmployees.find(e => e.employee_id === empId);
+      const hrEmployee = hrEmployees.find(e => e.employee_id.toUpperCase() === empIdUpper);
 
       if (!hrEmployee) {
         return res.json({ found: false, reason: 'not_found' });
       }
 
-      // 2. Check local DB for claimed status
+      // Check claimed status in DB for HR API employees too
       const claimed = await db.select().from(validEmployeeIds)
-        .where(and(eq(validEmployeeIds.employeeId, empId), eq(validEmployeeIds.isClaimed, true)))
+        .where(and(eq(validEmployeeIds.employeeId, hrEmployee.employee_id), eq(validEmployeeIds.isClaimed, true)))
         .limit(1);
 
       if (claimed.length > 0) {
@@ -299,7 +318,19 @@ export async function createApp() {
 
       const fullName = [hrEmployee.first_name, hrEmployee.middle_name, hrEmployee.last_name]
         .filter(Boolean).join(' ');
-      res.json({ found: true, fullName, employeeId: empId });
+      res.json({ found: true, fullName, employeeId: hrEmployee.employee_id });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // Check if an email is already registered (unauthenticated — used before Supabase signUp).
+  app.get('/api/check-email', async (req, res) => {
+    try {
+      const email = (req.query.email as string || '').trim().toLowerCase();
+      if (!email || !email.includes('@')) return res.status(400).json({ error: 'Valid email required.' });
+      const existing = await db.select().from(users).where(eq(users.email, email)).limit(1);
+      res.json({ registered: existing.length > 0 });
     } catch (err: any) {
       res.status(500).json({ error: err.message });
     }
@@ -318,44 +349,59 @@ export async function createApp() {
       const normalizedEmail = email.trim().toLowerCase();
       const stubUid = `${PENDING_UID_PREFIX}${normalizedEmail}`;
 
-      // Check if a real user with this email already exists
+      // Check if any user (pending or active) already exists with this email
       const existing = await db.select().from(users).where(eq(users.email, normalizedEmail)).limit(1);
-      if (existing.length > 0 && !existing[0].uid.startsWith(PENDING_UID_PREFIX)) {
-        return res.status(409).json({ error: 'An account with this email already exists.' });
+      if (existing.length > 0) {
+        return res.status(409).json({ error: 'An account with this email is already registered. Please log in instead.' });
       }
 
       let displayName = normalizedEmail.split('@')[0];
       let pendingEmployeeId: string | null = null;
 
-      // If an employee ID was provided, validate against HR API
+      // If an employee ID was provided, validate against local roster then HR API
       if (employeeId) {
         const empIdTrimmed = employeeId.trim();
+        const empIdUpper = empIdTrimmed.toUpperCase();
 
-        const hrEmployees = await getHREmployees();
-        const hrEmployee = hrEmployees.find(e => e.employee_id === empIdTrimmed);
-        if (!hrEmployee) {
-          return res.status(400).json({ error: 'Employee ID not found or already claimed.' });
+        // Check local roster first (case-insensitive)
+        const allLocal = await db.select().from(validEmployeeIds);
+        const localMatch = allLocal.find(e => e.employeeId.toUpperCase() === empIdUpper);
+
+        if (localMatch) {
+          if (localMatch.isClaimed) {
+            return res.status(400).json({ error: 'Employee ID not found or already claimed.' });
+          }
+          pendingEmployeeId = localMatch.employeeId; // use canonical casing from DB
+          displayName = [localMatch.firstName, localMatch.middleName, localMatch.lastName]
+            .filter(Boolean).join(' ') || displayName;
+        } else {
+          // Fall back to HR API
+          const hrEmployees = await getHREmployees();
+          const hrEmployee = hrEmployees.find(e => e.employee_id.toUpperCase() === empIdUpper);
+          if (!hrEmployee) {
+            return res.status(400).json({ error: 'Employee ID not found or already claimed.' });
+          }
+
+          // Check if already claimed via HR API employee
+          const claimed = await db.select().from(validEmployeeIds)
+            .where(and(eq(validEmployeeIds.employeeId, hrEmployee.employee_id), eq(validEmployeeIds.isClaimed, true)))
+            .limit(1);
+          if (claimed.length > 0) {
+            return res.status(400).json({ error: 'Employee ID not found or already claimed.' });
+          }
+
+          // Insert into validEmployeeIds so claimed status can be tracked on approval
+          await db.insert(validEmployeeIds).values({
+            employeeId: hrEmployee.employee_id,
+            firstName: hrEmployee.first_name || null,
+            middleName: hrEmployee.middle_name || null,
+            lastName: hrEmployee.last_name || null,
+          }).onConflictDoNothing();
+
+          pendingEmployeeId = hrEmployee.employee_id;
+          displayName = [hrEmployee.first_name, hrEmployee.middle_name, hrEmployee.last_name]
+            .filter(Boolean).join(' ') || displayName;
         }
-
-        // Check if already claimed
-        const claimed = await db.select().from(validEmployeeIds)
-          .where(and(eq(validEmployeeIds.employeeId, empIdTrimmed), eq(validEmployeeIds.isClaimed, true)))
-          .limit(1);
-        if (claimed.length > 0) {
-          return res.status(400).json({ error: 'Employee ID not found or already claimed.' });
-        }
-
-        // Upsert into validEmployeeIds so claimed status can be tracked on approval
-        await db.insert(validEmployeeIds).values({
-          employeeId: empIdTrimmed,
-          firstName: hrEmployee.first_name || null,
-          middleName: hrEmployee.middle_name || null,
-          lastName: hrEmployee.last_name || null,
-        }).onConflictDoNothing();
-
-        pendingEmployeeId = empIdTrimmed;
-        displayName = [hrEmployee.first_name, hrEmployee.middle_name, hrEmployee.last_name]
-          .filter(Boolean).join(' ') || displayName;
       }
 
       // Upsert the stub (idempotent — safe to call multiple times)

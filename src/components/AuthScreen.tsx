@@ -92,6 +92,13 @@ export default function AuthScreen({ onMockLogin, onPinLogin, isLoading, errorMs
         return;
       }
       try {
+        // Check if email is already registered before calling Supabase signUp
+        const checkRes = await fetch(`/api/check-email?email=${encodeURIComponent(email)}`);
+        const checkData = await checkRes.json();
+        if (checkData.registered) {
+          throw new Error('This email is already registered. Please log in instead.');
+        }
+
         const { error } = await supabase.auth.signUp({ email, password });
         if (error) throw error;
         try {
