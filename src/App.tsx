@@ -41,7 +41,8 @@ export default function App() {
 
 
   const navigateTo = (tab: string) => {
-    setMountedTabs(prev => new Set([...prev, tab]));
+    const mountKey = tab.startsWith('portal') ? 'portal' : tab;
+    setMountedTabs(prev => new Set([...prev, mountKey]));
     setActiveTab(tab);
   };
   const SETTINGS_CACHE_KEY = 'coop_settings';
@@ -117,7 +118,7 @@ export default function App() {
         const parsedUser = JSON.parse(savedUser);
         setCurrentUser(parsedUser);
         if (parsedUser.role === 'Member') {
-          navigateTo('portal');
+          navigateTo('portal-savings');
         } else {
           navigateTo('members');
         }
@@ -215,7 +216,7 @@ export default function App() {
       if (syncUser.mustChangePassword) {
         setShowMustChange(true);
       } else if (syncUser.role === 'Member') {
-        navigateTo('portal');
+        navigateTo('portal-savings');
       } else {
         navigateTo('members');
       }
@@ -261,7 +262,7 @@ export default function App() {
       localStorage.setItem('coop_currentUser', JSON.stringify(syncUser));
 
       if (syncUser.role === 'Member') {
-        navigateTo('portal');
+        navigateTo('portal-savings');
       } else {
         navigateTo('members');
       }
@@ -278,7 +279,7 @@ export default function App() {
     setAuthToken(token);
     localStorage.setItem('coop_authToken', token);
     localStorage.setItem('coop_currentUser', JSON.stringify(user));
-    if (user.role === 'Member') navigateTo('portal');
+    if (user.role === 'Member') navigateTo('portal-savings');
     else navigateTo('members');
   };
 
@@ -346,7 +347,7 @@ export default function App() {
       const updatedUser = { ...currentUser!, mustChangePassword: false };
       setCurrentUser(updatedUser);
       localStorage.setItem('coop_currentUser', JSON.stringify(updatedUser));
-      if (updatedUser.role === 'Member') navigateTo('portal');
+      if (updatedUser.role === 'Member') navigateTo('portal-savings');
       else navigateTo('members');
     } catch (err: any) {
       setMustChangeError(err.message || 'Failed to update password.');
@@ -609,8 +610,8 @@ export default function App() {
           </div>
         )}
         {mountedTabs.has('portal') && (
-          <div className={`flex-grow flex flex-col h-full overflow-hidden ${activeTab !== 'portal' ? 'hidden' : ''}`}>
-            <MemberPortal currentUser={currentUser} token={authToken} settings={settings} />
+          <div className={`flex-grow flex flex-col h-full overflow-hidden ${!activeTab.startsWith('portal') ? 'hidden' : ''}`}>
+            <MemberPortal currentUser={currentUser} token={authToken} settings={settings} activeTab={activeTab} />
           </div>
         )}
         {mountedTabs.has('users') && (

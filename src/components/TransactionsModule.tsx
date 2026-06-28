@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Member, Transaction, ChartOfAccount, User, AppSettings } from '../types.ts';
+import InfoButton from './InfoButton.tsx';
 import { motion, AnimatePresence } from 'motion/react';
 import {
   Plus,
@@ -22,7 +23,8 @@ import {
   ArrowUpCircle,
   TrendingUp,
   Edit3,
-  RotateCcw
+  RotateCcw,
+  Upload
 } from 'lucide-react';
 
 interface TransactionsModuleProps {
@@ -45,12 +47,15 @@ export default function TransactionsModule({ currentUser, token, settings }: Tra
   const [selectedMemberId, setSelectedMemberId] = useState('');
   const [memberSearch, setMemberSearch] = useState('');
   const [memberSearchOpen, setMemberSearchOpen] = useState(false);
-  const [transactionType, setTransactionType] = useState<'deposit' | 'withdrawal' | 'share_capital_contribution' | 'manual_adjustment'>('deposit');
+  const [transactionType, setTransactionType] = useState<'deposit' | 'withdrawal' | 'share_capital_contribution' | 'manual_adjustment' | 'loan_disbursement' | 'loan_payment'>('deposit');
   const [amount, setAmount] = useState('');
   const [description, setDescription] = useState('');
   const [manualDebitCoa, setManualDebitCoa] = useState('2010'); // Defaults to Savings Liability
   const [manualCreditCoa, setManualCreditCoa] = useState('3010'); // Defaults to Share Capital Equity
   const [posting, setPosting] = useState(false);
+  const [isCashPayment, setIsCashPayment] = useState(false);
+  const [receiptFile, setReceiptFile] = useState<File | null>(null);
+  const [receiptPreview, setReceiptPreview] = useState<string | null>(null);
 
   const closePostingModal = () => {
     setShowPostingModal(false);
@@ -61,6 +66,9 @@ export default function TransactionsModule({ currentUser, token, settings }: Tra
     setDescription('');
     setManualDebitCoa('2010');
     setManualCreditCoa('3010');
+    setIsCashPayment(false);
+    setReceiptFile(null);
+    setReceiptPreview(null);
   };
 
   // Modal Reversal state
@@ -191,6 +199,17 @@ export default function TransactionsModule({ currentUser, token, settings }: Tra
     setPosting(true);
     setErrMsg(null);
 
+    // Convert receipt file to base64 if provided
+    let receiptData: string | null = null;
+    if (receiptFile) {
+      receiptData = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result as string);
+        reader.onerror = reject;
+        reader.readAsDataURL(receiptFile);
+      });
+    }
+
     const payload = {
       memberId: selectedMemberId,
       transactionType,
@@ -198,6 +217,8 @@ export default function TransactionsModule({ currentUser, token, settings }: Tra
       description,
       manualDebitCoa: transactionType === 'manual_adjustment' ? manualDebitCoa : undefined,
       manualCreditCoa: transactionType === 'manual_adjustment' ? manualCreditCoa : undefined,
+      receiptData,
+      isCashPayment,
     };
 
     try {
@@ -293,9 +314,12 @@ export default function TransactionsModule({ currentUser, token, settings }: Tra
       {/* Top Controls */}
       <div className="flex items-start justify-between gap-3 mb-6 md:mb-8">
         <div className="min-w-0">
-          <h1 className="text-xl font-medium tracking-tight text-neutral-900 font-sans">
-            Transactions
-          </h1>
+          <div className="flex items-center gap-2">
+            <h1 className="text-xl font-medium tracking-tight text-neutral-900 font-sans">
+              Transactions
+            </h1>
+            <InfoButton text="Record and track all financial transactions — deposits, withdrawals, membership investments, and custom entries. All records are permanent and can only be undone, never deleted. Use the Deposit Requests tab to review member-submitted deposit receipts." />
+          </div>
           <p className="text-xs text-neutral-400 mt-1 hidden sm:block">
             View all recorded transactions, search by member or reference, or record a new transaction.
           </p>
@@ -419,6 +443,8 @@ export default function TransactionsModule({ currentUser, token, settings }: Tra
                             {txn.transactionType === 'share_capital_contribution' && <span className="inline-flex items-center gap-1 text-blue-700"><TrendingUp className="w-3 h-3" />Membership Investment</span>}
                             {txn.transactionType === 'manual_adjustment' && <span className="inline-flex items-center gap-1 text-amber-600"><Edit3 className="w-3 h-3" />Custom Entry</span>}
                             {txn.transactionType === 'reversal' && <span className="inline-flex items-center gap-1 text-neutral-500"><RotateCcw className="w-3 h-3" />Undone</span>}
+                            {txn.transactionType === 'loan_disbursement' && <span className="inline-flex items-center gap-1 text-orange-600"><ArrowUpCircle className="w-3 h-3" />Loan Disbursed</span>}
+                            {txn.transactionType === 'loan_payment' && <span className="inline-flex items-center gap-1 text-teal-700"><ArrowDownCircle className="w-3 h-3" />Loan Payment</span>}
                           </span>
                           <span className="text-[9px] text-neutral-400 font-mono">{date}</span>
                         </div>
@@ -476,6 +502,8 @@ export default function TransactionsModule({ currentUser, token, settings }: Tra
                           {txn.transactionType === 'share_capital_contribution' && <span className="inline-flex items-center gap-1.5 text-blue-700"><TrendingUp className="w-3.5 h-3.5 shrink-0" />Membership Investment</span>}
                           {txn.transactionType === 'manual_adjustment' && <span className="inline-flex items-center gap-1.5 text-amber-600"><Edit3 className="w-3.5 h-3.5 shrink-0" />Custom Entry</span>}
                           {txn.transactionType === 'reversal' && <span className="inline-flex items-center gap-1.5 text-neutral-500"><RotateCcw className="w-3.5 h-3.5 shrink-0" />Undone</span>}
+                          {txn.transactionType === 'loan_disbursement' && <span className="inline-flex items-center gap-1.5 text-orange-600"><ArrowUpCircle className="w-3.5 h-3.5 shrink-0" />Loan Disbursed</span>}
+                          {txn.transactionType === 'loan_payment' && <span className="inline-flex items-center gap-1.5 text-teal-700"><ArrowDownCircle className="w-3.5 h-3.5 shrink-0" />Loan Payment</span>}
                         </td>
                         <td className="py-3 px-4 text-neutral-500 leading-relaxed max-w-xs truncate" title={txn.description || ''}>
                           {txn.description || '—'}
@@ -786,6 +814,12 @@ export default function TransactionsModule({ currentUser, token, settings }: Tra
                     {['System Admin', 'Accounting Officer', 'Manager'].includes(currentUser.role) && (
                       <option value="manual_adjustment">Custom Entry</option>
                     )}
+                    {['System Admin', 'Accounting Officer', 'Manager'].includes(currentUser.role) && (
+                      <option value="loan_disbursement">Loan Disbursement</option>
+                    )}
+                    {['System Admin', 'Accounting Officer', 'Manager'].includes(currentUser.role) && (
+                      <option value="loan_payment">Loan Payment</option>
+                    )}
                   </select>
                 </div>
 
@@ -856,6 +890,76 @@ export default function TransactionsModule({ currentUser, token, settings }: Tra
                     required
                   />
                 </div>
+
+                {/* Receipt / Deposit Slip — not shown for manual adjustments or loan transactions */}
+                {transactionType !== 'manual_adjustment' && transactionType !== 'loan_disbursement' && transactionType !== 'loan_payment' && (
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <label className="block text-[10px] uppercase font-bold text-neutral-400">
+                        Deposit Slip / Receipt {!isCashPayment && <span className="text-red-400">*</span>}
+                      </label>
+                      <label className="flex items-center gap-1.5 text-[10px] text-neutral-500 cursor-pointer select-none">
+                        <input
+                          type="checkbox"
+                          checked={isCashPayment}
+                          onChange={e => {
+                            setIsCashPayment(e.target.checked);
+                            if (e.target.checked) { setReceiptFile(null); setReceiptPreview(null); }
+                          }}
+                          className="w-3 h-3 rounded cursor-pointer"
+                        />
+                        Manual cash payment (no receipt)
+                      </label>
+                    </div>
+
+                    {!isCashPayment && (
+                      <div className="space-y-2">
+                        <label className={`flex flex-col items-center justify-center w-full h-24 border-2 border-dashed rounded-lg cursor-pointer transition-colors ${receiptPreview ? 'border-emerald-300 bg-emerald-50' : 'border-neutral-200 bg-neutral-50 hover:border-neutral-400'}`}>
+                          <input
+                            type="file"
+                            accept="image/*,application/pdf"
+                            className="sr-only"
+                            onChange={e => {
+                              const file = e.target.files?.[0] || null;
+                              setReceiptFile(file);
+                              if (file && file.type.startsWith('image/')) {
+                                const url = URL.createObjectURL(file);
+                                setReceiptPreview(url);
+                              } else {
+                                setReceiptPreview(null);
+                              }
+                            }}
+                          />
+                          {receiptPreview ? (
+                            <img src={receiptPreview} alt="Receipt preview" className="h-full object-contain rounded-lg py-1" />
+                          ) : receiptFile ? (
+                            <div className="text-center">
+                              <p className="text-xs font-medium text-neutral-700">{receiptFile.name}</p>
+                              <p className="text-[10px] text-neutral-400 mt-0.5">PDF attached</p>
+                            </div>
+                          ) : (
+                            <div className="text-center">
+                              <p className="text-xs text-neutral-400">Click to upload receipt or deposit slip</p>
+                              <p className="text-[10px] text-neutral-300 mt-0.5">JPG, PNG, or PDF</p>
+                            </div>
+                          )}
+                        </label>
+                        {receiptFile && (
+                          <button type="button" onClick={() => { setReceiptFile(null); setReceiptPreview(null); }}
+                            className="text-[10px] text-red-400 hover:text-red-600 cursor-pointer">
+                            Remove receipt
+                          </button>
+                        )}
+                      </div>
+                    )}
+
+                    {isCashPayment && (
+                      <p className="text-[10px] text-amber-600 bg-amber-50 border border-amber-100 rounded-lg px-2.5 py-1.5">
+                        No receipt required — this will be recorded as a manual cash transaction.
+                      </p>
+                    )}
+                  </div>
+                )}
 
                 {errMsg && (
                   <div className="p-3 bg-red-50 border border-red-150 text-red-600 text-xs rounded-md">

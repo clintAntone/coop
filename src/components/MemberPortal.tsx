@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Member, LedgerLine, User, AppSettings } from '../types.ts';
+import InfoButton from './InfoButton.tsx';
 import { safeReadJson } from '../lib/safe-fetch.ts';
 import { motion } from 'motion/react';
 import {
@@ -29,13 +30,15 @@ interface MemberPortalProps {
   currentUser: User;
   token: string;
   settings: AppSettings;
+  activeTab: string;
 }
 
-export default function MemberPortal({ currentUser, token, settings }: MemberPortalProps) {
+export default function MemberPortal({ currentUser, token, settings, activeTab }: MemberPortalProps) {
   const [memberDetails, setMemberDetails] = useState<Member | null>(null);
   const [ledgerLines, setLedgerLines] = useState<LedgerLine[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const activeSection = activeTab === 'portal-investments' ? 'investments' : activeTab === 'portal-loans' ? 'loans' : 'savings';
 
   // Loan application state
   const [loanProducts2, setLoanProducts2] = useState<any[]>([]);
@@ -261,38 +264,48 @@ export default function MemberPortal({ currentUser, token, settings }: MemberPor
   return (
     <div className="flex-grow p-4 md:p-8 overflow-y-auto h-screen print:p-0">
       {/* Top Banner */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-8 print:hidden">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-6 print:hidden">
         <div className="min-w-0">
-          <h1 className="text-xl font-medium tracking-tight text-neutral-900 font-sans">
-            My Cooperative Account
-          </h1>
+          <div className="flex items-center gap-2">
+            <h1 className="text-xl font-medium tracking-tight text-neutral-900 font-sans">
+              My Cooperative Account
+            </h1>
+            <InfoButton text="This is your personal account dashboard. View your current savings and membership investment balances, browse your transaction history, request deposits, and apply for loans." />
+          </div>
           <p className="text-xs text-neutral-400 mt-0.5">
             Welcome back, {memberDetails.firstName}.
           </p>
         </div>
 
-        <div className="flex items-center justify-between sm:justify-end gap-2 shrink-0 sm:self-auto">
-          <div className="flex items-center gap-2">
-            <button
-              onClick={fetchMemberPortalData}
-              className="p-1.5 border border-neutral-200 hover:bg-neutral-50 rounded-lg transition-colors cursor-pointer"
-              title="Refresh"
-            >
-              <RefreshCw className="w-3.5 h-3.5 text-neutral-500" />
-            </button>
-            <button
-              onClick={handlePrint}
-              className="p-1.5 border border-neutral-200 hover:bg-neutral-50 text-neutral-700 rounded-lg shadow-sm cursor-pointer"
-              title="Print Ledger"
-            >
-              <Printer className="w-3.5 h-3.5" />
-            </button>
-          </div>
-          <button onClick={() => { setShowDepositForm(true); setDepositError(null); setDepositAmount(''); setDepositReceipt(null); setDepositReceiptName(''); setDepositAmountTouched(false); setDepositReceiptMissing(false); }}
-            className="flex items-center gap-1.5 bg-neutral-900 hover:bg-neutral-800 text-white text-xs font-semibold py-2 px-3 rounded-lg cursor-pointer transition-colors ml-auto sm:ml-2">
-            <PlusCircle className="w-3.5 h-3.5" />
-            <span>Request Deposit</span>
+        <div className="flex items-center gap-2 shrink-0">
+          <button
+            onClick={fetchMemberPortalData}
+            className="p-1.5 border border-neutral-200 hover:bg-neutral-50 rounded-lg transition-colors cursor-pointer"
+            title="Refresh"
+          >
+            <RefreshCw className="w-3.5 h-3.5 text-neutral-500" />
           </button>
+          <button
+            onClick={handlePrint}
+            className="p-1.5 border border-neutral-200 hover:bg-neutral-50 text-neutral-700 rounded-lg shadow-sm cursor-pointer"
+            title="Print Statement"
+          >
+            <Printer className="w-3.5 h-3.5" />
+          </button>
+          {activeSection === 'savings' && (
+            <button onClick={() => { setShowDepositForm(true); setDepositError(null); setDepositAmount(''); setDepositReceipt(null); setDepositReceiptName(''); setDepositAmountTouched(false); setDepositReceiptMissing(false); }}
+              className="flex items-center gap-1.5 bg-neutral-900 hover:bg-neutral-800 text-white text-xs font-semibold py-2 px-3 rounded-lg cursor-pointer transition-colors">
+              <PlusCircle className="w-3.5 h-3.5" />
+              <span>Request Deposit</span>
+            </button>
+          )}
+          {activeSection === 'loans' && loanProducts2.length > 0 && !myLoanApps.some(a => a.status === 'pending') && (
+            <button onClick={() => { setShowLoanForm(true); setLoanError(null); setLoanSuccess(false); }}
+              className="flex items-center gap-1.5 bg-neutral-900 hover:bg-neutral-800 text-white text-xs font-semibold py-2 px-3 rounded-lg cursor-pointer transition-colors">
+              <PlusCircle className="w-3.5 h-3.5" />
+              <span>Apply for Loan</span>
+            </button>
+          )}
         </div>
       </div>
 
@@ -312,301 +325,544 @@ export default function MemberPortal({ currentUser, token, settings }: MemberPor
         </div>
       </div>
 
-      <div className="space-y-8">
-        {/* Balances Board */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 lg:gap-6">
-          {/* Savings balance Card */}
-          <div className="bg-neutral-900 text-white rounded-xl p-5 shadow-lg border border-neutral-950 flex flex-col justify-between">
-            <div className="flex items-center justify-between">
-              <span className="text-[10px] uppercase font-bold text-neutral-400 tracking-wider">Withdrawable Savings</span>
-              <PiggyBank className="w-4 h-4 text-neutral-400" />
-            </div>
-            <div className="my-4">
-              <div className="text-[22px] font-sans font-medium tracking-tight">
-                {settings.currencySymbol}{balances ? (balances.savingsInCents / 100).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '0.00'}
-              </div>
-              <div className="text-[9px] text-neutral-400 mt-1 font-sans">Ledger Account: 2010 (Liability)</div>
-            </div>
-            <p className="text-[10px] text-neutral-400 leading-normal">
-              Accumulates interest. Available to withdraw by cashier request during desk hours.
-            </p>
-          </div>
+      <div className="space-y-6">
 
-          {/* Share Capital Equity card */}
-          <div className="bg-white border border-neutral-300 rounded-xl p-5 shadow-sm flex flex-col justify-between">
-            <div className="flex items-center justify-between">
-              <span className="text-[10px] uppercase font-bold text-neutral-400 tracking-wider">Membership Investment</span>
-              <Coins className="w-4 h-4 text-neutral-400" />
-            </div>
-            <div className="my-4">
-              <div className="text-[22px] font-sans font-medium text-neutral-900 tracking-tight">
-                {settings.currencySymbol}{balances ? (balances.shareCapitalInCents / 100).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '0.00'}
+        {/* ── MY SAVINGS ─────────────────────────────────────────────────────── */}
+        {activeSection === 'savings' && (
+          <div className="space-y-6">
+            {/* Savings Balance Card */}
+            <div className="bg-neutral-900 text-white rounded-xl p-5 shadow-lg border border-neutral-950 flex flex-col justify-between">
+              <div className="flex items-center justify-between">
+                <span className="text-[10px] uppercase font-bold text-neutral-400 tracking-wider">Withdrawable Savings</span>
+                <PiggyBank className="w-4 h-4 text-neutral-400" />
               </div>
-              <div className="text-[9px] text-neutral-500 mt-1 font-sans">Ledger Account: 3010 (Equity)</div>
-            </div>
-            <p className="text-[10px] text-neutral-500 leading-normal">
-              Represents your paid up equity share. Earns dividend yield on annual disbursements.
-            </p>
-          </div>
-
-          {/* Subsidiary Summary details card */}
-          <div className="bg-neutral-50 border border-neutral-200/80 rounded-xl p-5 flex flex-col justify-between print:hidden">
-            <div className="space-y-1">
-              <h3 className="text-[10px] font-bold text-neutral-400 uppercase tracking-widest flex items-center gap-1.5">
-                <Sparkles className="w-3.5 h-3.5 text-amber-500 shrink-0" /> Dynamic Membership ID
-              </h3>
-              <p className="text-[11px] text-neutral-500 leading-relaxed pt-1.5">
-                Your employee credentials have been securely linked under the cooperative double-entry audit engine.
+              <div className="my-4">
+                <div className="text-[28px] font-sans font-medium tracking-tight">
+                  {settings.currencySymbol}{balances ? (balances.savingsInCents / 100).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '0.00'}
+                </div>
+                <div className="text-[9px] text-neutral-400 mt-1 font-sans">Ledger Account: 2010 · Available Balance</div>
+              </div>
+              <p className="text-[10px] text-neutral-400 leading-normal">
+                Accumulates interest over time. To withdraw, submit a request at the cooperative desk during office hours.
               </p>
             </div>
-            <div className="border-t border-neutral-200/60 pt-4 flex items-center justify-between text-xs text-neutral-600">
-              <span>Security Bind:</span>
-              <span className="font-mono bg-neutral-250 border border-neutral-300 rounded px-1.5 text-[10px] py-0.5 text-neutral-800">
-                {memberDetails.employeeId}
-              </span>
+
+            {/* Account Statement */}
+            <div>
+              <div className="flex items-center gap-2 mb-3">
+                <h2 className="text-sm font-semibold text-neutral-800 font-sans">Account Statement</h2>
+                <InfoButton text="Every transaction on your savings account is listed here. Money In means funds added, Money Out means funds deducted. The Balance column shows your running total after each entry." />
+              </div>
+              <div className="bg-white border border-neutral-200 rounded-xl shadow-xl shadow-neutral-200/20 overflow-hidden">
+                <div className="p-4 border-b border-neutral-150 bg-neutral-50/50 flex justify-between items-center print:bg-white print:border-b print:pb-3">
+                  <span className="text-[10px] uppercase font-bold text-neutral-400">Personal savings ledger</span>
+                  <span className="text-[10px] text-neutral-400 font-mono font-bold uppercase">All transactions</span>
+                </div>
+                {(() => {
+                  const savingsLines = ledgerLines.filter(l => l.coaCode === '2010');
+                  if (savingsLines.length === 0) return (
+                    <div className="py-16 text-center max-w-xs mx-auto flex flex-col items-center gap-2">
+                      <FileText className="w-8 h-8 text-neutral-300 shrink-0" />
+                      <h3 className="text-xs font-semibold text-neutral-800">Statement is Empty</h3>
+                      <p className="text-[11px] text-neutral-400">Once your deposits are posted, transactions will appear here.</p>
+                    </div>
+                  );
+                  const TRANSACTION_TYPE_LABELS: Record<string, string> = {
+                    share_capital_contribution: 'Membership Investment',
+                    manual_adjustment: 'Custom Entry',
+                    reversal: 'Undone',
+                    loan_disbursement: 'Loan Disbursed',
+                    loan_payment: 'Loan Payment',
+                  };
+                  const sortedLines = [...savingsLines].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+                  let runningBalance = 0;
+                  const linesWithBalance = sortedLines.map(line => {
+                    if (line.status !== 'reversed') {
+                      if (line.entryType === 'credit') runningBalance += line.amount;
+                      else runningBalance -= line.amount;
+                    }
+                    return { ...line, runningBalance };
+                  });
+                  const balanceById: Record<number, number> = {};
+                  linesWithBalance.forEach(l => { balanceById[l.id] = l.runningBalance; });
+                  const finalBalance = linesWithBalance[linesWithBalance.length - 1]?.runningBalance ?? 0;
+                  return (
+                    <div className="overflow-x-auto"><table className="w-full text-left text-xs border-collapse">
+                      <thead>
+                        <tr className="bg-neutral-50 text-neutral-500 text-[10px] uppercase font-semibold border-b border-neutral-150 print:bg-neutral-100">
+                          <th className="py-2.5 px-4 w-28">Date</th>
+                          <th className="py-2.5 px-4">Description</th>
+                          <th className="py-2.5 px-4 text-right">Money Out</th>
+                          <th className="py-2.5 px-4 text-right">Money In</th>
+                          <th className="py-2.5 px-4 text-right">Balance</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-neutral-150 bg-white">
+                        {savingsLines.map((line) => {
+                          const lineDate = new Date(line.date).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+                          const isReversed = line.status === 'reversed';
+                          const displayDescription = TRANSACTION_TYPE_LABELS[line.description] ?? line.description;
+                          return (
+                            <tr key={line.id} className={`hover:bg-neutral-50/50 transition-colors ${isReversed ? 'bg-red-50/20 text-neutral-400 line-through' : ''}`}>
+                              <td className="py-3 px-4 font-mono text-[10px] text-neutral-500">{lineDate}</td>
+                              <td className="py-3 px-4">
+                                <div className="font-semibold text-neutral-850">{displayDescription}</div>
+                                {line.transactionRef && <div className="text-[9px] text-neutral-400 font-mono">Ref: {line.transactionRef}</div>}
+                              </td>
+                              <td className="py-3 px-4 text-right font-mono font-semibold text-neutral-900">
+                                {line.entryType === 'debit' ? `${settings.currencySymbol}(${(line.amount / 100).toFixed(2)})` : '—'}
+                              </td>
+                              <td className="py-3 px-4 text-right font-mono font-semibold text-emerald-700">
+                                {line.entryType === 'credit' ? `${settings.currencySymbol}${(line.amount / 100).toFixed(2)}` : '—'}
+                              </td>
+                              <td className="py-3 px-4 text-right font-mono text-[11px] text-neutral-600">
+                                {settings.currencySymbol}{(balanceById[line.id] / 100).toFixed(2)}
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                      <tfoot>
+                        <tr className="bg-neutral-50 border-t-2 border-neutral-200 font-mono font-bold text-[11px]">
+                          <td colSpan={2} className="py-3 px-4 text-right uppercase tracking-wider text-[10px] text-neutral-500">Totals</td>
+                          <td className="py-3 px-4 text-right text-neutral-900">
+                            {settings.currencySymbol}{(savingsLines.filter(l => l.entryType === 'debit' && l.status !== 'reversed').reduce((s, l) => s + l.amount, 0) / 100).toFixed(2)}
+                          </td>
+                          <td className="py-3 px-4 text-right text-emerald-700">
+                            {settings.currencySymbol}{(savingsLines.filter(l => l.entryType === 'credit' && l.status !== 'reversed').reduce((s, l) => s + l.amount, 0) / 100).toFixed(2)}
+                          </td>
+                          <td className="py-3 px-4 text-right text-neutral-900 font-bold">
+                            {settings.currencySymbol}{(finalBalance / 100).toFixed(2)}
+                          </td>
+                        </tr>
+                      </tfoot>
+                    </table></div>
+                  );
+                })()}
+              </div>
+            </div>
+
+            {/* Deposit Requests History */}
+            <div className="print:hidden">
+              {depositSuccess && (
+                <div className="flex items-center gap-2 p-3 mb-3 bg-emerald-50 border border-emerald-200 rounded-xl text-xs text-emerald-700">
+                  <CheckCircle className="w-4 h-4 shrink-0" />
+                  Deposit request submitted! It will be reviewed by an accounting officer.
+                </div>
+              )}
+              <div className="border border-neutral-200 rounded-xl overflow-hidden bg-white">
+                <div className="px-4 py-3 border-b border-neutral-100 bg-neutral-50/50">
+                  <span className="text-[10px] font-bold uppercase text-neutral-400 tracking-wider">Deposit Request History</span>
+                </div>
+                {depositRequests.length === 0 ? (
+                  <div className="py-8 text-center text-neutral-400 text-xs">No deposit requests yet. Use the <strong>Request Deposit</strong> button above to get started.</div>
+                ) : (
+                  <ul className="divide-y divide-neutral-100">
+                    {depositRequests.map(dr => (
+                      <li key={dr.id} className="flex items-center justify-between px-4 py-3 gap-3">
+                        <div className="min-w-0">
+                          <div className="text-sm font-semibold text-neutral-900 font-mono">{settings.currencySymbol}{(dr.amountCents / 100).toLocaleString('en-US', { minimumFractionDigits: 2 })}</div>
+                          <div className="text-[10px] text-neutral-400 mt-0.5">{new Date(dr.createdAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}</div>
+                          {dr.notes && dr.status === 'rejected' && <div className="text-[10px] text-red-500 mt-0.5 italic">"{dr.notes}"</div>}
+                        </div>
+                        <div className="flex items-center gap-2 shrink-0">
+                          <button onClick={() => setViewReceiptUrl(dr.receiptData)} className="text-[10px] text-neutral-400 hover:text-neutral-700 underline cursor-pointer">View Receipt</button>
+                          <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${
+                            dr.status === 'approved' ? 'bg-emerald-100 text-emerald-700' :
+                            dr.status === 'rejected' ? 'bg-red-100 text-red-600' :
+                            'bg-amber-100 text-amber-700'
+                          }`}>{dr.status.charAt(0).toUpperCase() + dr.status.slice(1)}</span>
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
             </div>
           </div>
-        </div>
+        )}
 
-        {/* Ledger Entries list card */}
-        <div className="bg-white border border-neutral-200 rounded-xl shadow-xl shadow-neutral-200/20 overflow-hidden">
-          <div className="p-4 border-b border-neutral-150 bg-neutral-50/50 flex justify-between items-center print:bg-white print:border-b print:pb-3">
-            <span className="text-[10px] uppercase font-bold text-neutral-400">Personal Subsidiary ledger statement</span>
-            <span className="text-[10px] text-neutral-400 font-mono font-bold uppercase">All transaction rows</span>
-          </div>
-
-          {ledgerLines.length === 0 ? (
-            <div className="py-24 text-center max-w-xs mx-auto flex flex-col items-center gap-2">
-              <FileText className="w-8 h-8 text-neutral-300 shrink-0" />
-              <h3 className="text-xs font-semibold text-neutral-800">Statement is Empty</h3>
-              <p className="text-[11px] text-neutral-400">Once your capital deposits are posted, line statements will populate here.</p>
+        {/* ── MY INVESTMENTS ──────────────────────────────────────────────────── */}
+        {activeSection === 'investments' && (
+          <div className="space-y-6">
+            {/* Investment Balance Card */}
+            <div className="bg-white border border-neutral-300 rounded-xl p-6 shadow-sm flex flex-col justify-between">
+              <div className="flex items-center justify-between">
+                <span className="text-[10px] uppercase font-bold text-neutral-400 tracking-wider">Membership Investment</span>
+                <Coins className="w-4 h-4 text-neutral-400" />
+              </div>
+              <div className="my-5">
+                <div className="text-[28px] font-sans font-medium text-neutral-900 tracking-tight">
+                  {settings.currencySymbol}{balances ? (balances.shareCapitalInCents / 100).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '0.00'}
+                </div>
+                <div className="text-[9px] text-neutral-500 mt-1 font-sans">Ledger Account: 3010 · Share Capital Equity</div>
+              </div>
+              <p className="text-[11px] text-neutral-500 leading-normal">
+                Represents your ownership stake in the cooperative. This amount earns dividend yield, which is distributed annually based on the cooperative's net surplus.
+              </p>
             </div>
-          ) : (() => {
-            const TRANSACTION_TYPE_LABELS: Record<string, string> = {
-              share_capital_contribution: 'Membership Investment',
-              manual_adjustment: 'Custom Entry',
-              reversal: 'Undone',
-            };
-            // Sort by date ascending to compute running balance
-            const sortedLines = [...ledgerLines].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
-            let runningBalance = 0;
-            const linesWithBalance = sortedLines.map(line => {
-              if (line.status !== 'reversed') {
-                if (line.entryType === 'credit') runningBalance += line.amount;
-                else runningBalance -= line.amount;
-              }
-              return { ...line, runningBalance };
-            });
-            // Re-sort back to original order for display (preserve original ledgerLines order, just attach balance)
-            const balanceById: Record<number, number> = {};
-            linesWithBalance.forEach(l => { balanceById[l.id] = l.runningBalance; });
-            const finalBalance = linesWithBalance[linesWithBalance.length - 1]?.runningBalance ?? 0;
-            return (
-              <div className="overflow-x-auto"><table className="w-full text-left text-xs border-collapse">
-                <thead>
-                  <tr className="bg-neutral-50 text-neutral-500 text-[10px] uppercase font-semibold border-b border-neutral-150 print:bg-neutral-100">
-                    <th className="py-2.5 px-4 w-28">Date</th>
-                    <th className="py-2.5 px-4">Description Mem</th>
-                    <th className="py-2.5 px-4">Account COA</th>
-                    <th className="py-2.5 px-4 text-right">Money Out</th>
-                    <th className="py-2.5 px-4 text-right">Money In</th>
-                    <th className="py-2.5 px-4 text-right">Balance</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-neutral-150 bg-white">
-                  {ledgerLines.map((line) => {
-                    const lineDate = new Date(line.date).toLocaleDateString(undefined, {
-                      month: 'short',
-                      day: 'numeric',
-                      year: 'numeric'
-                    });
-                    const isReversed = line.status === 'reversed';
-                    const displayDescription = TRANSACTION_TYPE_LABELS[line.description] ?? line.description;
-                    return (
-                      <tr
-                        key={line.id}
-                        className={`hover:bg-neutral-50/50 transition-colors ${
-                          isReversed ? 'bg-red-50/20 text-neutral-400 line-through' : ''
-                        }`}
-                      >
-                        <td className="py-3 px-4 font-mono text-[10px] text-neutral-500">{lineDate}</td>
-                        <td className="py-3 px-4">
-                          <div className="font-semibold text-neutral-850">{displayDescription}</div>
-                          {line.transactionRef && (
-                            <div className="text-[9px] text-neutral-400 font-mono">Ref: {line.transactionRef}</div>
-                          )}
-                        </td>
-                        <td className="py-3 px-4">
-                          <span className="font-mono text-[10px] bg-neutral-100 border border-neutral-200 text-neutral-600 px-1.5 py-0.5 rounded">
-                            {line.coaCode}
-                          </span>
-                          <span className="text-[11px] pl-1.5 text-neutral-500">{line.coaName}</span>
-                        </td>
-                        <td className="py-3 px-4 text-right font-mono font-semibold text-neutral-900">
-                          {line.entryType === 'debit' ? `${settings.currencySymbol}(${(line.amount / 100).toFixed(2)})` : '—'}
-                        </td>
-                        <td className="py-3 px-4 text-right font-mono font-semibold text-emerald-700">
-                          {line.entryType === 'credit' ? `${settings.currencySymbol}${(line.amount / 100).toFixed(2)}` : '—'}
-                        </td>
-                        <td className="py-3 px-4 text-right font-mono text-[11px] text-neutral-600">
-                          {settings.currencySymbol}{(balanceById[line.id] / 100).toFixed(2)}
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-                <tfoot>
-                  <tr className="bg-neutral-50 border-t-2 border-neutral-200 font-mono font-bold text-[11px]">
-                    <td colSpan={3} className="py-3 px-4 text-right uppercase tracking-wider text-[10px] text-neutral-500">Totals</td>
-                    <td className="py-3 px-4 text-right text-neutral-900">
-                      {settings.currencySymbol}{(ledgerLines.filter(l => l.entryType === 'debit' && l.status !== 'reversed').reduce((s, l) => s + l.amount, 0) / 100).toFixed(2)}
-                    </td>
-                    <td className="py-3 px-4 text-right text-emerald-700">
-                      {settings.currencySymbol}{(ledgerLines.filter(l => l.entryType === 'credit' && l.status !== 'reversed').reduce((s, l) => s + l.amount, 0) / 100).toFixed(2)}
-                    </td>
-                    <td className="py-3 px-4 text-right text-neutral-900 font-bold">
-                      {settings.currencySymbol}{(finalBalance / 100).toFixed(2)}
-                    </td>
-                  </tr>
-                </tfoot>
-              </table></div>
-            );
-          })()}
-        </div>
 
-        {/* Loan Applications Section */}
-        <div className="space-y-4">
-          <div className="flex items-center justify-between">
-            <h2 className="text-sm font-semibold text-neutral-900">Loan Applications</h2>
-            {loanProducts2.length > 0 && !myLoanApps.some(a => a.status === 'pending') && (
-              <button
-                onClick={() => { setShowLoanForm(true); setLoanError(null); setLoanSuccess(false); }}
-                className="flex items-center gap-1.5 bg-neutral-900 hover:bg-neutral-800 text-white text-xs font-semibold py-1.5 px-3 rounded-lg cursor-pointer"
-              >
-                <PlusCircle className="w-3.5 h-3.5" />
-                Apply for Loan
-              </button>
+            {/* Investment Contribution History */}
+            <div>
+              <div className="flex items-center gap-2 mb-3">
+                <h2 className="text-sm font-semibold text-neutral-800 font-sans">Contribution History</h2>
+                <InfoButton text="Your membership investment contributions are recorded here. Each credit entry represents a share capital contribution made to the cooperative." />
+              </div>
+              <div className="bg-white border border-neutral-200 rounded-xl shadow-xl shadow-neutral-200/20 overflow-hidden">
+                <div className="p-4 border-b border-neutral-150 bg-neutral-50/50 flex justify-between items-center">
+                  <span className="text-[10px] uppercase font-bold text-neutral-400">Share capital ledger · COA 3010</span>
+                  <span className="text-[10px] text-neutral-400 font-mono font-bold uppercase">All contributions</span>
+                </div>
+                {(() => {
+                  const investLines = ledgerLines.filter(l => l.coaCode === '3010');
+                  if (investLines.length === 0) return (
+                    <div className="py-12 text-center max-w-xs mx-auto flex flex-col items-center gap-2">
+                      <FileText className="w-8 h-8 text-neutral-300 shrink-0" />
+                      <h3 className="text-xs font-semibold text-neutral-800">No Contributions Yet</h3>
+                      <p className="text-[11px] text-neutral-400">Your membership investment contributions will appear here once posted by an accounting officer.</p>
+                    </div>
+                  );
+                  const INVEST_LABELS: Record<string, string> = {
+                    share_capital_contribution: 'Share Capital Contribution',
+                    manual_adjustment: 'Custom Entry',
+                    reversal: 'Undone',
+                  };
+                  const sortedInvest = [...investLines].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+                  let runningInvest = 0;
+                  const investWithBalance = sortedInvest.map(line => {
+                    if (line.status !== 'reversed') {
+                      if (line.entryType === 'credit') runningInvest += line.amount;
+                      else runningInvest -= line.amount;
+                    }
+                    return { ...line, runningBalance: runningInvest };
+                  });
+                  const investBalanceById: Record<number, number> = {};
+                  investWithBalance.forEach(l => { investBalanceById[l.id] = l.runningBalance; });
+                  const investFinalBalance = investWithBalance[investWithBalance.length - 1]?.runningBalance ?? 0;
+                  return (
+                    <div className="overflow-x-auto"><table className="w-full text-left text-xs border-collapse">
+                      <thead>
+                        <tr className="bg-neutral-50 text-neutral-500 text-[10px] uppercase font-semibold border-b border-neutral-150">
+                          <th className="py-2.5 px-4 w-28">Date</th>
+                          <th className="py-2.5 px-4">Description</th>
+                          <th className="py-2.5 px-4 text-right">Contribution</th>
+                          <th className="py-2.5 px-4 text-right">Withdrawn</th>
+                          <th className="py-2.5 px-4 text-right">Balance</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-neutral-150 bg-white">
+                        {investLines.map((line) => {
+                          const lineDate = new Date(line.date).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+                          const isReversed = line.status === 'reversed';
+                          const displayDescription = INVEST_LABELS[line.description] ?? line.description;
+                          return (
+                            <tr key={line.id} className={`hover:bg-neutral-50/50 transition-colors ${isReversed ? 'bg-red-50/20 text-neutral-400 line-through' : ''}`}>
+                              <td className="py-3 px-4 font-mono text-[10px] text-neutral-500">{lineDate}</td>
+                              <td className="py-3 px-4">
+                                <div className="font-semibold text-neutral-850">{displayDescription}</div>
+                                {line.transactionRef && <div className="text-[9px] text-neutral-400 font-mono">Ref: {line.transactionRef}</div>}
+                              </td>
+                              <td className="py-3 px-4 text-right font-mono font-semibold text-emerald-700">
+                                {line.entryType === 'credit' ? `${settings.currencySymbol}${(line.amount / 100).toFixed(2)}` : '—'}
+                              </td>
+                              <td className="py-3 px-4 text-right font-mono font-semibold text-neutral-500">
+                                {line.entryType === 'debit' ? `${settings.currencySymbol}(${(line.amount / 100).toFixed(2)})` : '—'}
+                              </td>
+                              <td className="py-3 px-4 text-right font-mono text-[11px] text-neutral-600">
+                                {settings.currencySymbol}{(investBalanceById[line.id] / 100).toFixed(2)}
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                      <tfoot>
+                        <tr className="bg-neutral-50 border-t-2 border-neutral-200 font-mono font-bold text-[11px]">
+                          <td colSpan={2} className="py-3 px-4 text-right uppercase tracking-wider text-[10px] text-neutral-500">Totals</td>
+                          <td className="py-3 px-4 text-right text-emerald-700">
+                            {settings.currencySymbol}{(investLines.filter(l => l.entryType === 'credit' && l.status !== 'reversed').reduce((s, l) => s + l.amount, 0) / 100).toFixed(2)}
+                          </td>
+                          <td className="py-3 px-4 text-right text-neutral-500">
+                            {settings.currencySymbol}{(investLines.filter(l => l.entryType === 'debit' && l.status !== 'reversed').reduce((s, l) => s + l.amount, 0) / 100).toFixed(2)}
+                          </td>
+                          <td className="py-3 px-4 text-right text-neutral-900 font-bold">
+                            {settings.currencySymbol}{(investFinalBalance / 100).toFixed(2)}
+                          </td>
+                        </tr>
+                      </tfoot>
+                    </table></div>
+                  );
+                })()}
+              </div>
+            </div>
+
+            {/* What is a Membership Investment */}
+            <div className="bg-neutral-50 border border-neutral-200 rounded-xl p-5 space-y-3">
+              <div className="flex items-center gap-2">
+                <Sparkles className="w-4 h-4 text-amber-500 shrink-0" />
+                <h3 className="text-xs font-semibold text-neutral-700">What is a Membership Investment?</h3>
+              </div>
+              <p className="text-[11px] text-neutral-500 leading-relaxed">
+                Unlike regular savings, your membership investment is your <strong>equity share</strong> in the cooperative. When you contribute to the cooperative's capital fund, you become a part-owner — entitling you to annual dividends when the cooperative earns a surplus.
+              </p>
+              <ul className="space-y-1.5">
+                {[
+                  'Contributions are pooled to fund Hilot Center branches and cooperative operations.',
+                  'You earn dividends proportional to your share capital each year.',
+                  'This is separate from your withdrawable savings balance.',
+                  'Contact an accounting officer to make additional share capital contributions.',
+                ].map((item, i) => (
+                  <li key={i} className="flex items-start gap-2 text-[11px] text-neutral-500">
+                    <span className="w-1.5 h-1.5 rounded-full bg-neutral-400 shrink-0 mt-1.5" />
+                    {item}
+                  </li>
+                ))}
+              </ul>
+            </div>
+
+            {/* Member ID info */}
+            <div className="bg-neutral-50 border border-neutral-200/80 rounded-xl p-5">
+              <h3 className="text-[10px] font-bold text-neutral-400 uppercase tracking-widest flex items-center gap-1.5 mb-3">
+                <Sparkles className="w-3.5 h-3.5 text-amber-500 shrink-0" /> Member Record
+              </h3>
+              <div className="grid grid-cols-2 gap-3 text-xs text-neutral-600">
+                <div><span className="text-neutral-400">Name</span><div className="font-semibold text-neutral-800 mt-0.5">{memberDetails.firstName} {memberDetails.lastName}</div></div>
+                <div><span className="text-neutral-400">Employee ID</span><div className="font-mono font-semibold text-neutral-800 mt-0.5">{memberDetails.employeeId}</div></div>
+                <div><span className="text-neutral-400">Department</span><div className="font-semibold text-neutral-800 mt-0.5">{memberDetails.department || '—'}</div></div>
+                <div><span className="text-neutral-400">Status</span><div className="mt-0.5"><span className={`inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full ${memberDetails.isActive ? 'bg-emerald-100 text-emerald-700' : 'bg-neutral-100 text-neutral-500'}`}><span className={`w-1.5 h-1.5 rounded-full shrink-0 ${memberDetails.isActive ? 'bg-emerald-500' : 'bg-neutral-400'}`} />{memberDetails.isActive ? 'Active' : 'Suspended'}</span></div></div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ── MY LOANS ────────────────────────────────────────────────────────── */}
+        {activeSection === 'loans' && (
+          <div className="space-y-4">
+            {loanSuccess && (
+              <div className="p-3 bg-emerald-50 border border-emerald-200 text-emerald-700 text-xs rounded-lg flex items-center gap-2">
+                <CheckCircle className="w-4 h-4 shrink-0" />
+                Your loan application has been submitted and is pending review.
+              </div>
             )}
-          </div>
 
-          {loanSuccess && (
-            <div className="p-3 bg-emerald-50 border border-emerald-200 text-emerald-700 text-xs rounded-lg flex items-center gap-2">
-              <CheckCircle className="w-4 h-4 shrink-0" />
-              Your loan application has been submitted and is pending review.
+            {/* Outstanding Loan Balance Card */}
+            {(() => {
+              const outstanding = balances?.loansOutstandingCents ?? 0;
+              const hasBalance = outstanding > 0;
+              return (
+                <div className={`rounded-xl p-5 border flex flex-col justify-between ${hasBalance ? 'bg-amber-50 border-amber-200' : 'bg-neutral-50 border-neutral-200'}`}>
+                  <div className="flex items-center justify-between">
+                    <span className={`text-[10px] uppercase font-bold tracking-wider ${hasBalance ? 'text-amber-600' : 'text-neutral-400'}`}>Outstanding Loan Balance</span>
+                    <TrendingDown className={`w-4 h-4 ${hasBalance ? 'text-amber-500' : 'text-neutral-300'}`} />
+                  </div>
+                  <div className="my-4">
+                    <div className={`text-[28px] font-sans font-medium tracking-tight ${hasBalance ? 'text-amber-700' : 'text-neutral-400'}`}>
+                      {settings.currencySymbol}{(outstanding / 100).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    </div>
+                    <div className={`text-[9px] mt-1 font-sans ${hasBalance ? 'text-amber-500' : 'text-neutral-400'}`}>Ledger Account: 1050 · Loans Receivable</div>
+                  </div>
+                  <p className={`text-[10px] leading-normal ${hasBalance ? 'text-amber-600' : 'text-neutral-400'}`}>
+                    {hasBalance ? 'You have an active loan balance. Make payments at the cooperative office to reduce your outstanding amount.' : 'No active loan balance. You are fully paid up.'}
+                  </p>
+                </div>
+              );
+            })()}
+
+            {/* Loan Passbook */}
+            <div>
+              <div className="flex items-center gap-2 mb-3">
+                <h2 className="text-sm font-semibold text-neutral-800 font-sans">Loan Passbook</h2>
+                <InfoButton text="This shows all loan disbursements and repayments posted to your account. Loan Issued increases your outstanding balance; Payment Made reduces it." />
+              </div>
+              <div className="bg-white border border-neutral-200 rounded-xl shadow-xl shadow-neutral-200/20 overflow-hidden">
+                <div className="p-4 border-b border-neutral-150 bg-neutral-50/50 flex justify-between items-center">
+                  <span className="text-[10px] uppercase font-bold text-neutral-400">Loan ledger · COA 1050</span>
+                  <span className="text-[10px] text-neutral-400 font-mono font-bold uppercase">All loan entries</span>
+                </div>
+                {(() => {
+                  const loanLines = ledgerLines.filter(l => l.coaCode === '1050');
+                  if (loanLines.length === 0) return (
+                    <div className="py-12 text-center max-w-xs mx-auto flex flex-col items-center gap-2">
+                      <FileText className="w-8 h-8 text-neutral-300 shrink-0" />
+                      <h3 className="text-xs font-semibold text-neutral-800">No Loan Entries Yet</h3>
+                      <p className="text-[11px] text-neutral-400">Loan disbursements and payments will appear here once recorded by an accounting officer.</p>
+                    </div>
+                  );
+                  const LOAN_LABELS: Record<string, string> = {
+                    loan_disbursement: 'Loan Disbursed',
+                    loan_payment: 'Loan Payment',
+                    manual_adjustment: 'Custom Entry',
+                    reversal: 'Undone',
+                  };
+                  const sortedLoan = [...loanLines].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+                  let runningLoan = 0;
+                  const loanWithBalance = sortedLoan.map(line => {
+                    if (line.status !== 'reversed') {
+                      // debit on 1050 = loan issued (balance increases)
+                      // credit on 1050 = payment (balance decreases)
+                      if (line.entryType === 'debit') runningLoan += line.amount;
+                      else runningLoan -= line.amount;
+                    }
+                    return { ...line, runningBalance: runningLoan };
+                  });
+                  const loanBalanceById: Record<number, number> = {};
+                  loanWithBalance.forEach(l => { loanBalanceById[l.id] = l.runningBalance; });
+                  const loanFinalBalance = loanWithBalance[loanWithBalance.length - 1]?.runningBalance ?? 0;
+                  return (
+                    <div className="overflow-x-auto"><table className="w-full text-left text-xs border-collapse">
+                      <thead>
+                        <tr className="bg-neutral-50 text-neutral-500 text-[10px] uppercase font-semibold border-b border-neutral-150">
+                          <th className="py-2.5 px-4 w-28">Date</th>
+                          <th className="py-2.5 px-4">Description</th>
+                          <th className="py-2.5 px-4 text-right">Loan Issued</th>
+                          <th className="py-2.5 px-4 text-right">Payment Made</th>
+                          <th className="py-2.5 px-4 text-right">Outstanding</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-neutral-150 bg-white">
+                        {loanLines.map((line) => {
+                          const lineDate = new Date(line.date).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+                          const isReversed = line.status === 'reversed';
+                          const displayDescription = LOAN_LABELS[line.description] ?? line.description;
+                          return (
+                            <tr key={line.id} className={`hover:bg-neutral-50/50 transition-colors ${isReversed ? 'bg-red-50/20 text-neutral-400 line-through' : ''}`}>
+                              <td className="py-3 px-4 font-mono text-[10px] text-neutral-500">{lineDate}</td>
+                              <td className="py-3 px-4">
+                                <div className="font-semibold text-neutral-850">{displayDescription}</div>
+                                {line.transactionRef && <div className="text-[9px] text-neutral-400 font-mono">Ref: {line.transactionRef}</div>}
+                              </td>
+                              <td className="py-3 px-4 text-right font-mono font-semibold text-orange-600">
+                                {line.entryType === 'debit' ? `${settings.currencySymbol}${(line.amount / 100).toFixed(2)}` : '—'}
+                              </td>
+                              <td className="py-3 px-4 text-right font-mono font-semibold text-emerald-700">
+                                {line.entryType === 'credit' ? `${settings.currencySymbol}${(line.amount / 100).toFixed(2)}` : '—'}
+                              </td>
+                              <td className="py-3 px-4 text-right font-mono text-[11px] text-neutral-600">
+                                {settings.currencySymbol}{(loanBalanceById[line.id] / 100).toFixed(2)}
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                      <tfoot>
+                        <tr className="bg-neutral-50 border-t-2 border-neutral-200 font-mono font-bold text-[11px]">
+                          <td colSpan={2} className="py-3 px-4 text-right uppercase tracking-wider text-[10px] text-neutral-500">Totals</td>
+                          <td className="py-3 px-4 text-right text-orange-600">
+                            {settings.currencySymbol}{(loanLines.filter(l => l.entryType === 'debit' && l.status !== 'reversed').reduce((s, l) => s + l.amount, 0) / 100).toFixed(2)}
+                          </td>
+                          <td className="py-3 px-4 text-right text-emerald-700">
+                            {settings.currencySymbol}{(loanLines.filter(l => l.entryType === 'credit' && l.status !== 'reversed').reduce((s, l) => s + l.amount, 0) / 100).toFixed(2)}
+                          </td>
+                          <td className="py-3 px-4 text-right text-neutral-900 font-bold">
+                            {settings.currencySymbol}{(loanFinalBalance / 100).toFixed(2)}
+                          </td>
+                        </tr>
+                      </tfoot>
+                    </table></div>
+                  );
+                })()}
+              </div>
             </div>
-          )}
 
-          {/* Loan progress tracker — only shown when member has at least one application */}
-          {myLoanApps.length > 0 && (() => {
-            const latest = [...myLoanApps].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())[0];
-            const status = latest.status;
-            const outcomeLabel = status === 'approved' ? 'Approved' : status === 'rejected' ? 'Rejected' : status === 'cancelled' ? 'Cancelled' : 'Decision';
-            const activeStep = status === 'pending' ? 1 : (status === 'approved' || status === 'rejected' || status === 'cancelled') ? 2 : 1;
-            const outcomeColor = status === 'approved' ? 'bg-emerald-500 text-white' : status === 'rejected' ? 'bg-red-500 text-white' : status === 'cancelled' ? 'bg-neutral-300 text-neutral-600' : 'bg-neutral-200 text-neutral-500';
-            const outcomeConnector = status === 'approved' ? 'bg-emerald-400' : status === 'rejected' ? 'bg-red-400' : 'bg-neutral-200';
-            const outcomeIcon = status === 'approved' ? ' ✓' : status === 'rejected' ? ' ✗' : '';
-            return (
-              <div className="bg-neutral-50 border border-neutral-200 rounded-xl px-5 py-4">
-                <p className="text-[10px] uppercase font-bold text-neutral-400 tracking-wider mb-3">Latest Application Status</p>
-                <div className="flex items-center gap-0">
-                  {/* Step 0: Applied */}
-                  <div className="flex flex-col items-center gap-1.5 shrink-0">
-                    <div className={`w-7 h-7 rounded-full flex items-center justify-center text-[11px] font-bold ${activeStep >= 0 ? 'bg-neutral-900 text-white' : 'bg-neutral-200 text-neutral-500'}`}>1</div>
-                    <span className="text-[10px] font-medium text-neutral-600 whitespace-nowrap">Applied</span>
-                  </div>
-                  {/* Connector */}
-                  <div className={`flex-1 h-0.5 mx-1 mb-4 ${activeStep >= 1 ? 'bg-neutral-900' : 'bg-neutral-200'}`} />
-                  {/* Step 1: Under Review */}
-                  <div className="flex flex-col items-center gap-1.5 shrink-0">
-                    <div className={`w-7 h-7 rounded-full flex items-center justify-center text-[11px] font-bold ${activeStep >= 1 ? 'bg-neutral-900 text-white' : 'bg-neutral-200 text-neutral-500'}`}>2</div>
-                    <span className="text-[10px] font-medium text-neutral-600 whitespace-nowrap">Under Review</span>
-                  </div>
-                  {/* Connector */}
-                  <div className={`flex-1 h-0.5 mx-1 mb-4 ${activeStep >= 2 ? outcomeConnector : 'bg-neutral-200'}`} />
-                  {/* Step 2: Outcome */}
-                  <div className="flex flex-col items-center gap-1.5 shrink-0">
-                    <div className={`w-7 h-7 rounded-full flex items-center justify-center text-[11px] font-bold ${activeStep >= 2 ? outcomeColor : 'bg-neutral-200 text-neutral-500'}`}>3</div>
-                    <span className="text-[10px] font-medium text-neutral-600 whitespace-nowrap">
-                      {activeStep >= 2 ? outcomeLabel + outcomeIcon : 'Decision'}
-                    </span>
+            {/* Progress tracker */}
+            {myLoanApps.length > 0 && (() => {
+              const latest = [...myLoanApps].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())[0];
+              const status = latest.status;
+              const outcomeLabel = status === 'approved' ? 'Approved' : status === 'rejected' ? 'Rejected' : status === 'cancelled' ? 'Cancelled' : 'Decision';
+              const activeStep = status === 'pending' ? 1 : (status === 'approved' || status === 'rejected' || status === 'cancelled') ? 2 : 1;
+              const outcomeColor = status === 'approved' ? 'bg-emerald-500 text-white' : status === 'rejected' ? 'bg-red-500 text-white' : status === 'cancelled' ? 'bg-neutral-300 text-neutral-600' : 'bg-neutral-200 text-neutral-500';
+              const outcomeConnector = status === 'approved' ? 'bg-emerald-400' : status === 'rejected' ? 'bg-red-400' : 'bg-neutral-200';
+              const outcomeIcon = status === 'approved' ? ' ✓' : status === 'rejected' ? ' ✗' : '';
+              return (
+                <div className="bg-neutral-50 border border-neutral-200 rounded-xl px-5 py-4">
+                  <p className="text-[10px] uppercase font-bold text-neutral-400 tracking-wider mb-3">Latest Application Status</p>
+                  <div className="flex items-center gap-0">
+                    <div className="flex flex-col items-center gap-1.5 shrink-0">
+                      <div className={`w-7 h-7 rounded-full flex items-center justify-center text-[11px] font-bold ${activeStep >= 0 ? 'bg-neutral-900 text-white' : 'bg-neutral-200 text-neutral-500'}`}>1</div>
+                      <span className="text-[10px] font-medium text-neutral-600 whitespace-nowrap">Applied</span>
+                    </div>
+                    <div className={`flex-1 h-0.5 mx-1 mb-4 ${activeStep >= 1 ? 'bg-neutral-900' : 'bg-neutral-200'}`} />
+                    <div className="flex flex-col items-center gap-1.5 shrink-0">
+                      <div className={`w-7 h-7 rounded-full flex items-center justify-center text-[11px] font-bold ${activeStep >= 1 ? 'bg-neutral-900 text-white' : 'bg-neutral-200 text-neutral-500'}`}>2</div>
+                      <span className="text-[10px] font-medium text-neutral-600 whitespace-nowrap">Under Review</span>
+                    </div>
+                    <div className={`flex-1 h-0.5 mx-1 mb-4 ${activeStep >= 2 ? outcomeConnector : 'bg-neutral-200'}`} />
+                    <div className="flex flex-col items-center gap-1.5 shrink-0">
+                      <div className={`w-7 h-7 rounded-full flex items-center justify-center text-[11px] font-bold ${activeStep >= 2 ? outcomeColor : 'bg-neutral-200 text-neutral-500'}`}>3</div>
+                      <span className="text-[10px] font-medium text-neutral-600 whitespace-nowrap">{activeStep >= 2 ? outcomeLabel + outcomeIcon : 'Decision'}</span>
+                    </div>
                   </div>
                 </div>
+              );
+            })()}
+
+            {loanProducts2.length === 0 ? (
+              <div className="bg-neutral-50 border border-neutral-200 rounded-xl p-6 text-center">
+                <FileText className="w-6 h-6 text-neutral-300 mx-auto mb-2" />
+                <p className="text-xs font-semibold text-neutral-600">Loan products not yet available</p>
+                <p className="text-[11px] text-neutral-400 mt-1">The cooperative has not configured any loan products yet. Please check back later or contact your manager.</p>
               </div>
-            );
-          })()}
+            ) : myLoanApps.length === 0 ? (
+              <div className="bg-neutral-50 border border-neutral-200 rounded-xl p-8 text-center">
+                <FileText className="w-6 h-6 text-neutral-300 mx-auto mb-2" />
+                <p className="text-xs font-semibold text-neutral-600">No loan applications yet</p>
+                <p className="text-[11px] text-neutral-400 mt-1">Click <strong>Apply for Loan</strong> in the top-right to submit your first application.</p>
+              </div>
+            ) : (
+              <div className="bg-white border border-neutral-200 rounded-xl overflow-hidden shadow-sm">
+                <div className="overflow-x-auto"><table className="w-full text-left text-xs border-collapse">
+                  <thead>
+                    <tr className="bg-neutral-50 border-b border-neutral-200 text-[10px] uppercase font-bold text-neutral-400">
+                      <th className="py-2.5 px-4">Product</th>
+                      <th className="py-2.5 px-4">Amount</th>
+                      <th className="py-2.5 px-4">Term</th>
+                      <th className="py-2.5 px-4">Status</th>
+                      <th className="py-2.5 px-4">Applied</th>
+                      <th className="py-2.5 px-4"></th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-neutral-100">
+                    {myLoanApps.map(a => {
+                      const statusDot = (s: string) => {
+                        switch (s) {
+                          case 'pending':   return <span className="inline-flex items-center gap-1.5 text-[10px] font-medium text-amber-600"><span className="w-1.5 h-1.5 rounded-full bg-amber-400 shrink-0" />Pending</span>;
+                          case 'approved':  return <span className="inline-flex items-center gap-1.5 text-[10px] font-medium text-emerald-600"><span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0" />Approved</span>;
+                          case 'rejected':  return <span className="inline-flex items-center gap-1.5 text-[10px] font-medium text-red-500"><span className="w-1.5 h-1.5 rounded-full bg-red-400 shrink-0" />Rejected</span>;
+                          case 'cancelled': return <span className="inline-flex items-center gap-1.5 text-[10px] font-medium text-neutral-400"><span className="w-1.5 h-1.5 rounded-full bg-neutral-300 shrink-0" />Cancelled</span>;
+                          default: return null;
+                        }
+                      };
+                      return (
+                        <tr key={a.id} className="hover:bg-neutral-50/40">
+                          <td className="py-3 px-4 font-medium text-neutral-800">{a.loanProductName}</td>
+                          <td className="py-3 px-4 font-mono text-neutral-900">{settings.currencySymbol}{(a.requestedAmountCents / 100).toLocaleString('en-US', { minimumFractionDigits: 2 })}</td>
+                          <td className="py-3 px-4 text-neutral-500">{a.termMonths} mo.</td>
+                          <td className="py-3 px-4">{statusDot(a.status)}</td>
+                          <td className="py-3 px-4 text-neutral-400 font-mono text-[10px]">{new Date(a.createdAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}</td>
+                          <td className="py-3 px-4 text-right">
+                            {a.status === 'pending' && (
+                              <button onClick={() => setCancelConfirmId(a.id)}
+                                className="flex items-center gap-1 text-[11px] text-neutral-400 hover:text-red-500 cursor-pointer transition-colors">
+                                <Ban className="w-3 h-3" />Cancel
+                              </button>
+                            )}
+                            {a.status === 'rejected' && a.reviewNotes && (
+                              <span className="text-[10px] text-red-400 italic max-w-[160px] truncate block text-right" title={a.reviewNotes}>
+                                "{a.reviewNotes}"
+                              </span>
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table></div>
+              </div>
+            )}
+          </div>
+        )}
 
-          {loanProducts2.length === 0 ? (
-            <div className="bg-neutral-50 border border-neutral-200 rounded-xl p-6 text-center">
-              <FileText className="w-6 h-6 text-neutral-300 mx-auto mb-2" />
-              <p className="text-xs font-semibold text-neutral-600">Loan products not yet available</p>
-              <p className="text-[11px] text-neutral-400 mt-1">The cooperative has not configured any loan products yet. Please check back later or contact your manager.</p>
-            </div>
-          ) : myLoanApps.length === 0 ? (
-            <div className="bg-neutral-50 border border-neutral-200 rounded-xl p-6 text-center">
-              <p className="text-xs text-neutral-500">No loan applications yet. Click <strong>Apply for Loan</strong> to get started.</p>
-            </div>
-          ) : (
-            <div className="bg-white border border-neutral-200 rounded-xl overflow-hidden shadow-sm">
-              <div className="overflow-x-auto"><table className="w-full text-left text-xs border-collapse">
-                <thead>
-                  <tr className="bg-neutral-50 border-b border-neutral-200 text-[10px] uppercase font-bold text-neutral-400">
-                    <th className="py-2.5 px-4">Product</th>
-                    <th className="py-2.5 px-4">Amount</th>
-                    <th className="py-2.5 px-4">Term</th>
-                    <th className="py-2.5 px-4">Status</th>
-                    <th className="py-2.5 px-4">Applied</th>
-                    <th className="py-2.5 px-4"></th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-neutral-100">
-                  {myLoanApps.map(a => {
-                    const statusDot = (s: string) => {
-                      switch (s) {
-                        case 'pending':   return <span className="inline-flex items-center gap-1.5 text-[10px] font-medium text-amber-600"><span className="w-1.5 h-1.5 rounded-full bg-amber-400 shrink-0" />Pending</span>;
-                        case 'approved':  return <span className="inline-flex items-center gap-1.5 text-[10px] font-medium text-emerald-600"><span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0" />Approved</span>;
-                        case 'rejected':  return <span className="inline-flex items-center gap-1.5 text-[10px] font-medium text-red-500"><span className="w-1.5 h-1.5 rounded-full bg-red-400 shrink-0" />Rejected</span>;
-                        case 'cancelled': return <span className="inline-flex items-center gap-1.5 text-[10px] font-medium text-neutral-400"><span className="w-1.5 h-1.5 rounded-full bg-neutral-300 shrink-0" />Cancelled</span>;
-                        default: return null;
-                      }
-                    };
-                    return (
-                      <tr key={a.id} className="hover:bg-neutral-50/40">
-                        <td className="py-3 px-4 font-medium text-neutral-800">{a.loanProductName}</td>
-                        <td className="py-3 px-4 font-mono text-neutral-900">{settings.currencySymbol}{(a.requestedAmountCents / 100).toLocaleString('en-US', { minimumFractionDigits: 2 })}</td>
-                        <td className="py-3 px-4 text-neutral-500">{a.termMonths} mo.</td>
-                        <td className="py-3 px-4">{statusDot(a.status)}</td>
-                        <td className="py-3 px-4 text-neutral-400 font-mono text-[10px]">{new Date(a.createdAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}</td>
-                        <td className="py-3 px-4 text-right">
-                          {a.status === 'pending' && (
-                            <button onClick={() => setCancelConfirmId(a.id)}
-                              className="flex items-center gap-1 text-[11px] text-neutral-400 hover:text-red-500 cursor-pointer transition-colors">
-                              <Ban className="w-3 h-3" />Cancel
-                            </button>
-                          )}
-                          {a.status === 'rejected' && a.reviewNotes && (
-                            <span className="text-[10px] text-red-400 italic max-w-[160px] truncate block text-right" title={a.reviewNotes}>
-                              "{a.reviewNotes}"
-                            </span>
-                          )}
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table></div>
-            </div>
-          )}
-        </div>
-
-        {/* Deposit Requests Section */}
-        <div className="space-y-4 print:hidden">
-          {depositSuccess && (
-            <div className="flex items-center gap-2 p-3 bg-emerald-50 border border-emerald-200 rounded-xl text-xs text-emerald-700">
-              <CheckCircle className="w-4 h-4 shrink-0" />
-              Deposit request submitted! It will be reviewed by an accounting officer.
-            </div>
-          )}
-
+        {/* ── MODALS (always rendered at root level) ──────────────────────────── */}
+        <div className="print:hidden">
           {/* Loan Application Modal */}
           {showLoanForm && (
             <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
@@ -826,35 +1082,6 @@ export default function MemberPortal({ currentUser, token, settings }: MemberPor
             </div>
           )}
 
-          {/* Past deposit requests */}
-          <div className="border border-neutral-200 rounded-xl overflow-hidden bg-white">
-            <div className="px-4 py-3 border-b border-neutral-100 bg-neutral-50/50">
-              <span className="text-[10px] font-bold uppercase text-neutral-400 tracking-wider">Your Deposit History</span>
-            </div>
-            {depositRequests.length === 0 ? (
-              <div className="py-8 text-center text-neutral-400 text-xs">No deposit requests yet.</div>
-            ) : (
-              <ul className="divide-y divide-neutral-100">
-                {depositRequests.map(dr => (
-                  <li key={dr.id} className="flex items-center justify-between px-4 py-3 gap-3">
-                    <div className="min-w-0">
-                      <div className="text-sm font-semibold text-neutral-900 font-mono">{settings.currencySymbol}{(dr.amountCents / 100).toLocaleString('en-US', { minimumFractionDigits: 2 })}</div>
-                      <div className="text-[10px] text-neutral-400 mt-0.5">{new Date(dr.createdAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}</div>
-                      {dr.notes && dr.status === 'rejected' && <div className="text-[10px] text-red-500 mt-0.5 italic">"{dr.notes}"</div>}
-                    </div>
-                    <div className="flex items-center gap-2 shrink-0">
-                      <button onClick={() => setViewReceiptUrl(dr.receiptData)} className="text-[10px] text-neutral-400 hover:text-neutral-700 underline cursor-pointer">View Receipt</button>
-                      <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${
-                        dr.status === 'approved' ? 'bg-emerald-100 text-emerald-700' :
-                        dr.status === 'rejected' ? 'bg-red-100 text-red-600' :
-                        'bg-amber-100 text-amber-700'
-                      }`}>{dr.status.charAt(0).toUpperCase() + dr.status.slice(1)}</span>
-                    </div>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </div>
         </div>
       </div>
 

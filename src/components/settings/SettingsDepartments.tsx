@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { safeReadJson } from '../../lib/safe-fetch.ts';
 import { Plus, Pencil, Trash2, Loader, X } from 'lucide-react';
+import InfoButton from '../InfoButton.tsx';
 
 interface Props { token: string; }
 
@@ -99,7 +100,10 @@ export default function SettingsDepartments({ token }: Props) {
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-xs font-bold text-neutral-500 uppercase tracking-widest">Company Departments</h2>
+          <div className="flex items-center gap-2">
+            <h2 className="text-xs font-bold text-neutral-500 uppercase tracking-widest">Company Departments</h2>
+            <InfoButton text="Define the departments or work units in your organization. Members are assigned to a department when they join. You can add, rename, or deactivate departments at any time." />
+          </div>
           <p className="text-[11px] text-neutral-400 mt-1">Departments used for member classification. The code appears as a shorthand (e.g. HR, FIN, OPS).</p>
         </div>
         <button onClick={openAdd}

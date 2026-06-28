@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { safeReadJson } from '../../lib/safe-fetch.ts';
 import { Plus, Pencil, Trash2, X, Loader } from 'lucide-react';
+import InfoButton from '../InfoButton.tsx';
 
 interface Props { token: string; }
 
@@ -159,7 +160,10 @@ export default function SettingsChartOfAccounts({ token }: Props) {
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-xs font-bold text-neutral-500 uppercase tracking-widest">Account Categories</h2>
+          <div className="flex items-center gap-2">
+            <h2 className="text-xs font-bold text-neutral-500 uppercase tracking-widest">Account Categories</h2>
+            <InfoButton text="Account categories are used to classify all financial transactions in the system. Each transaction is automatically assigned to the right category — you only need to manage this if you want to add custom categories." />
+          </div>
           <p className="text-[11px] text-neutral-400 mt-1">Manage the categories used to classify all financial transactions.</p>
         </div>
         <button

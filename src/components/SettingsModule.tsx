@@ -26,28 +26,28 @@ type SectionId =
 
 const NAV: { group: string; items: { id: SectionId; label: string }[] }[] = [
   {
-    group: 'General',
+    group: 'App',
     items: [
-      { id: 'branding', label: 'App Branding' },
+      { id: 'branding', label: 'Branding & Identity' },
     ],
   },
   {
-    group: 'Membership',
+    group: 'Members',
     items: [
-      { id: 'membership', label: 'Types & Statuses' },
       { id: 'departments', label: 'Departments' },
+      { id: 'membership', label: 'Membership Types & Statuses' },
     ],
   },
   {
-    group: 'Financial Rules',
+    group: 'Loans & Savings',
     items: [
-      { id: 'shareCapital', label: 'Share Capital' },
+      { id: 'shareCapital', label: 'Share Capital Rules' },
       { id: 'products', label: 'Savings & Loan Products' },
       { id: 'loanRules', label: 'Loan Approval & Parameters' },
     ],
   },
   {
-    group: 'System',
+    group: 'Advanced',
     items: [
       { id: 'coa', label: 'Account Categories' },
     ],
@@ -81,7 +81,7 @@ export default function SettingsModule({ currentUser, token, onSettingsUpdated, 
 
       {/* Desktop: Left nav */}
       <aside className="hidden lg:flex w-52 shrink-0 border-r border-neutral-200 bg-white flex-col py-6 px-3 overflow-y-auto">
-        <p className="text-[10px] font-bold uppercase tracking-widest text-neutral-400 px-2 mb-4">Settings</p>
+        <p className="text-[10px] font-bold uppercase tracking-widest text-neutral-400 px-2 mb-4">Configuration</p>
         {NAV.map(group => (
           <div key={group.group} className="mb-6">
             <p className="text-[9px] font-bold uppercase tracking-widest text-neutral-300 px-2 mb-2">{group.group}</p>

@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { safeReadJson } from '../../lib/safe-fetch.ts';
 import { AppSettings } from '../../types.ts';
 import { Plus, Pencil, Trash2, X, Loader } from 'lucide-react';
+import InfoButton from '../InfoButton.tsx';
 
 interface Props { token: string; settings: AppSettings; }
 
@@ -101,7 +102,10 @@ function SavingsProducts({ token, settings }: Props) {
     <div className="space-y-3">
       <div className="flex items-center justify-between">
         <div>
-          <h3 className="text-xs font-bold text-neutral-700">Savings Products</h3>
+          <div className="flex items-center gap-2">
+            <h3 className="text-xs font-bold text-neutral-700">Savings Products</h3>
+            <InfoButton text="Savings products define the types of savings accounts available to members, including the annual interest rate earned on their balance." />
+          </div>
           <p className="text-[11px] text-neutral-400 mt-0.5">Savings account types offered to members (e.g. Regular Savings, Time Deposit).</p>
         </div>
         <button onClick={openAdd}
@@ -364,7 +368,10 @@ function LoanProducts({ token, settings }: Props) {
     <div className="space-y-3">
       <div className="flex items-center justify-between">
         <div>
-          <h3 className="text-xs font-bold text-neutral-700">Loan Products</h3>
+          <div className="flex items-center gap-2">
+            <h3 className="text-xs font-bold text-neutral-700">Loan Products</h3>
+            <InfoButton text="Loan products define the types of loans the cooperative offers — including interest rates, maximum amounts, and repayment terms." />
+          </div>
           <p className="text-[11px] text-neutral-400 mt-0.5">Types of loans available to members (e.g. Emergency Loan, Multi-Purpose Loan).</p>
         </div>
         <button onClick={openAdd}

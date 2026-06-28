@@ -14,6 +14,13 @@ export async function seedChartOfAccounts() {
         description: 'Cooperative primary operating cash in bank or cashier drawer'
       },
       {
+        code: '1050',
+        name: 'Loans Receivable',
+        type: 'asset',
+        normalBalance: 'debit',
+        description: 'Outstanding loan balances owed by members'
+      },
+      {
         code: '2010',
         name: 'Member Savings Liability',
         type: 'liability',
@@ -65,6 +72,7 @@ export const seedAppSettings = async () => {
 export interface MemberBalances {
   savingsInCents: number;
   shareCapitalInCents: number;
+  loansOutstandingCents: number;
 }
 
 /**
@@ -118,9 +126,32 @@ export async function calculateMemberBalances(memberId: number): Promise<MemberB
     }
     const shareCapitalInCents = capCreditsValue - capDebitsValue;
 
+    // Loans Receivable (1050): Normal is Debit. Outstanding = Debits - Credits.
+    const loanResult = await db.select({
+      type: journalEntryLines.entryType,
+      sum: sql<string>`coalesce(sum(${journalEntryLines.amount}), 0)`
+    })
+    .from(journalEntryLines)
+    .where(
+      and(
+        eq(journalEntryLines.coaCode, '1050'),
+        eq(journalEntryLines.memberId, memberId)
+      )
+    )
+    .groupBy(journalEntryLines.entryType);
+
+    let loanDebits = 0;
+    let loanCredits = 0;
+    for (const row of loanResult) {
+      if (row.type === 'debit') loanDebits = parseInt(row.sum, 10);
+      if (row.type === 'credit') loanCredits = parseInt(row.sum, 10);
+    }
+    const loansOutstandingCents = loanDebits - loanCredits;
+
     return {
       savingsInCents,
-      shareCapitalInCents
+      shareCapitalInCents,
+      loansOutstandingCents,
     };
   } catch (error) {
     console.error(`Error calculating ledger balance for member ${memberId}:`, error);
@@ -133,12 +164,13 @@ export async function calculateMemberBalances(memberId: number): Promise<MemberB
  */
 export async function createAndPostTransaction(
   memberId: number,
-  transactionType: 'deposit' | 'withdrawal' | 'share_capital_contribution' | 'manual_adjustment',
+  transactionType: 'deposit' | 'withdrawal' | 'share_capital_contribution' | 'manual_adjustment' | 'loan_disbursement' | 'loan_payment',
   amountInCents: number,
   description: string,
   createdById: number,
   manualDebitCoa?: string, // Only for manual adjustments
-  manualCreditCoa?: string // Only for manual adjustments
+  manualCreditCoa?: string, // Only for manual adjustments
+  receiptData?: string // base64 data URL of deposit slip / receipt
 ): Promise<any> {
   if (amountInCents <= 0) {
     throw new Error("Transaction amount must be greater than zero.");
@@ -181,6 +213,7 @@ export async function createAndPostTransaction(
         referenceNumber,
         description,
         createdBy: createdById,
+        receiptData: receiptData || null,
       })
       .returning();
 
@@ -271,6 +304,42 @@ export async function createAndPostTransaction(
         journalEntryId: journalHeading.id,
         coaCode: manualCreditCoa,
         memberId: (manualCreditCoa === '2010' || manualCreditCoa === '3010') ? memberId : null,
+        entryType: 'credit',
+        amount: amountInCents
+      });
+    } else if (transactionType === 'loan_disbursement') {
+      // Loan Disbursed:
+      // Debit: 1050 Loans Receivable (asset, member owes this)
+      // Credit: 1010 Cash on Hand (cash leaves cooperative)
+      await tx.insert(journalEntryLines).values({
+        journalEntryId: journalHeading.id,
+        coaCode: '1050',
+        memberId: memberId, // Attributed to member's loan subsidiary ledger
+        entryType: 'debit',
+        amount: amountInCents
+      });
+      await tx.insert(journalEntryLines).values({
+        journalEntryId: journalHeading.id,
+        coaCode: '1010',
+        memberId: null,
+        entryType: 'credit',
+        amount: amountInCents
+      });
+    } else if (transactionType === 'loan_payment') {
+      // Loan Payment Received:
+      // Debit: 1010 Cash on Hand (cash comes in)
+      // Credit: 1050 Loans Receivable (asset decreases, member owes less)
+      await tx.insert(journalEntryLines).values({
+        journalEntryId: journalHeading.id,
+        coaCode: '1010',
+        memberId: null,
+        entryType: 'debit',
+        amount: amountInCents
+      });
+      await tx.insert(journalEntryLines).values({
+        journalEntryId: journalHeading.id,
+        coaCode: '1050',
+        memberId: memberId,
         entryType: 'credit',
         amount: amountInCents
       });

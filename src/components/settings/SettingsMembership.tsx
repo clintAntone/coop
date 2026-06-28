@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { safeReadJson } from '../../lib/safe-fetch.ts';
 import { Plus, Pencil, Trash2, Loader, X } from 'lucide-react';
+import InfoButton from '../InfoButton.tsx';
 
 interface Props { token: string; }
 
@@ -16,11 +17,12 @@ type Modal =
   | { mode: 'add' }
   | { mode: 'edit'; item: TermItem };
 
-function TermsList({ title, description, endpoint, token }: {
+function TermsList({ title, description, endpoint, token, infoText }: {
   title: string;
   description: string;
   endpoint: string;
   token: string;
+  infoText?: string;
 }) {
   const [items, setItems] = useState<TermItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -106,7 +108,10 @@ function TermsList({ title, description, endpoint, token }: {
     <div className="space-y-3">
       <div className="flex items-center justify-between">
         <div>
-          <h3 className="text-xs font-bold text-neutral-700">{title}</h3>
+          <div className="flex items-center gap-2">
+            <h3 className="text-xs font-bold text-neutral-700">{title}</h3>
+            {infoText && <InfoButton text={infoText} />}
+          </div>
           <p className="text-[11px] text-neutral-400 mt-0.5">{description}</p>
         </div>
         <button onClick={openAdd}
@@ -253,6 +258,7 @@ export default function SettingsMembership({ token }: Props) {
         description="Classification of cooperative membership (e.g. Regular, Associate, Honorary)."
         endpoint="/api/terms/membership-types"
         token={token}
+        infoText="Types classify what kind of member someone is — for example, Regular, Associate, or Honorary. These are for your records and don't affect system permissions."
       />
       <div className="border-t border-neutral-100" />
       <TermsList
@@ -260,6 +266,7 @@ export default function SettingsMembership({ token }: Props) {
         description="Lifecycle statuses for a member (e.g. Active, Suspended, Deceased)."
         endpoint="/api/terms/membership-statuses"
         token={token}
+        infoText="Statuses describe a member's current standing — for example, Active, Suspended, or Deceased. These are for tracking purposes."
       />
     </div>
   );

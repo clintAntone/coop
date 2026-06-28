@@ -15,6 +15,7 @@ import {
   Copy,
   KeyRound,
 } from 'lucide-react';
+import InfoButton from './InfoButton.tsx';
 
 interface UsersModuleProps {
   currentUser: User;
@@ -274,7 +275,10 @@ export default function UsersModule({ currentUser, token }: UsersModuleProps) {
       {/* Header */}
       <div className="flex items-center justify-between flex-wrap gap-y-2">
         <div>
-          <h1 className="text-xl font-medium tracking-tight text-neutral-900">System User Accounts</h1>
+          <div className="flex items-center gap-2">
+            <h1 className="text-xl font-medium tracking-tight text-neutral-900">System User Accounts</h1>
+            <InfoButton text="Manage who has access to this system. Approve new registrations, assign roles, reset passwords, and suspend accounts. Only System Admins can access this page." />
+          </div>
           <p className="text-xs text-neutral-400 mt-1">Review registrations, approve members, and manage staff access privileges.</p>
         </div>
         <div className="flex items-center gap-2">

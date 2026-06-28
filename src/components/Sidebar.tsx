@@ -17,6 +17,9 @@ import {
   Target,
   Eye,
   HandCoins,
+  PiggyBank,
+  Coins,
+  Layers,
 } from 'lucide-react';
 
 interface SidebarProps {
@@ -100,43 +103,46 @@ export default function Sidebar({ currentUser, activeTab, setActiveTab, onLogout
 
         {/* Navigation */}
         <nav className="flex-grow p-4 space-y-1.5 overflow-y-auto">
-          <div className="text-[9px] font-bold text-neutral-600 uppercase tracking-widest pl-3 mb-2">Operations</div>
-
           {currentUser.role !== 'Member' && (
-            <button onClick={() => navigate('members')}
-              className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-xs font-medium tracking-wide transition-all cursor-pointer ${activeTab === 'members' ? 'bg-white text-neutral-900 shadow font-semibold' : 'text-neutral-400 hover:text-neutral-100 hover:bg-neutral-850'}`}>
-              <Users className="w-4 h-4 shrink-0" /><span>Members Module</span>
-            </button>
-          )}
+            <>
+              <div className="text-[9px] font-bold text-neutral-600 uppercase tracking-widest pl-3 mb-2">Operations</div>
+              <button onClick={() => navigate('members')}
+                className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-xs font-medium tracking-wide transition-all cursor-pointer ${activeTab === 'members' ? 'bg-white text-neutral-900 shadow font-semibold' : 'text-neutral-400 hover:text-neutral-100 hover:bg-neutral-850'}`}>
+                <Users className="w-4 h-4 shrink-0" /><span>Members Module</span>
+              </button>
+              <button onClick={() => navigate('transactions')}
+                className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-xs font-medium tracking-wide transition-all cursor-pointer ${activeTab === 'transactions' ? 'bg-white text-neutral-900 shadow font-semibold' : 'text-neutral-400 hover:text-neutral-100 hover:bg-neutral-850'}`}>
+                <DollarSign className="w-4 h-4 shrink-0" /><span>Transactions</span>
+              </button>
+              <button onClick={() => navigate('loans')}
+                className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-xs font-medium tracking-wide transition-all cursor-pointer ${activeTab === 'loans' ? 'bg-white text-neutral-900 shadow font-semibold' : 'text-neutral-400 hover:text-neutral-100 hover:bg-neutral-850'}`}>
+                <HandCoins className="w-4 h-4 shrink-0" /><span>Loan Applications</span>
+              </button>
 
-          {currentUser.role !== 'Member' && (
-            <button onClick={() => navigate('transactions')}
-              className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-xs font-medium tracking-wide transition-all cursor-pointer ${activeTab === 'transactions' ? 'bg-white text-neutral-900 shadow font-semibold' : 'text-neutral-400 hover:text-neutral-100 hover:bg-neutral-850'}`}>
-              <DollarSign className="w-4 h-4 shrink-0" /><span>Transactions</span>
-            </button>
-          )}
-
-          {currentUser.role !== 'Member' && (
-            <button onClick={() => navigate('loans')}
-              className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-xs font-medium tracking-wide transition-all cursor-pointer ${activeTab === 'loans' ? 'bg-white text-neutral-900 shadow font-semibold' : 'text-neutral-400 hover:text-neutral-100 hover:bg-neutral-850'}`}>
-              <HandCoins className="w-4 h-4 shrink-0" /><span>Loan Applications</span>
-            </button>
-          )}
-
-          <div className="text-[9px] font-bold text-neutral-600 uppercase tracking-widest pl-3 mt-4 mb-2">Intelligence</div>
-
-          {currentUser.role !== 'Member' && (
-            <button onClick={() => navigate('reports')}
-              className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-xs font-medium tracking-wide transition-all cursor-pointer ${activeTab === 'reports' ? 'bg-white text-neutral-900 shadow font-semibold' : 'text-neutral-400 hover:text-neutral-100 hover:bg-neutral-850'}`}>
-              <LineChart className="w-4 h-4 shrink-0" /><span>Reports & Analytics</span>
-            </button>
+              <div className="text-[9px] font-bold text-neutral-600 uppercase tracking-widest pl-3 mt-4 mb-2">Intelligence</div>
+              <button onClick={() => navigate('reports')}
+                className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-xs font-medium tracking-wide transition-all cursor-pointer ${activeTab === 'reports' ? 'bg-white text-neutral-900 shadow font-semibold' : 'text-neutral-400 hover:text-neutral-100 hover:bg-neutral-850'}`}>
+                <LineChart className="w-4 h-4 shrink-0" /><span>Reports & Analytics</span>
+              </button>
+            </>
           )}
 
           {currentUser.role === 'Member' && (
-            <button onClick={() => navigate('portal')}
-              className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-xs font-medium tracking-wide transition-all cursor-pointer ${activeTab === 'portal' ? 'bg-white text-neutral-900 shadow font-semibold' : 'text-neutral-400 hover:text-neutral-100 hover:bg-neutral-850'}`}>
-              <FileText className="w-4 h-4 shrink-0" /><span>My Account</span>
-            </button>
+            <div className="space-y-0.5">
+              <div className="text-[9px] font-bold text-neutral-600 uppercase tracking-widest pl-3 mb-1.5">My Account</div>
+              <button onClick={() => navigate('portal-savings')}
+                className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-xs font-medium tracking-wide transition-all cursor-pointer ${activeTab === 'portal-savings' ? 'bg-white text-neutral-900 shadow font-semibold' : 'text-neutral-400 hover:text-neutral-100 hover:bg-neutral-850'}`}>
+                <PiggyBank className="w-4 h-4 shrink-0" /><span>My Savings</span>
+              </button>
+              <button onClick={() => navigate('portal-investments')}
+                className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-xs font-medium tracking-wide transition-all cursor-pointer ${activeTab === 'portal-investments' ? 'bg-white text-neutral-900 shadow font-semibold' : 'text-neutral-400 hover:text-neutral-100 hover:bg-neutral-850'}`}>
+                <Coins className="w-4 h-4 shrink-0" /><span>My Investments</span>
+              </button>
+              <button onClick={() => navigate('portal-loans')}
+                className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-xs font-medium tracking-wide transition-all cursor-pointer ${activeTab === 'portal-loans' ? 'bg-white text-neutral-900 shadow font-semibold' : 'text-neutral-400 hover:text-neutral-100 hover:bg-neutral-850'}`}>
+                <Layers className="w-4 h-4 shrink-0" /><span>My Loans</span>
+              </button>
+            </div>
           )}
 
           {(currentUser.role === 'System Admin' || currentUser.role === 'Manager') && (
@@ -149,7 +155,7 @@ export default function Sidebar({ currentUser, activeTab, setActiveTab, onLogout
               {currentUser.role === 'System Admin' && (
                 <button onClick={() => navigate('settings')}
                   className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-xs font-medium tracking-wide transition-all cursor-pointer ${activeTab === 'settings' ? 'bg-white text-neutral-900 shadow font-semibold' : 'text-neutral-400 hover:text-neutral-100 hover:bg-neutral-850'}`}>
-                  <Settings className="w-4 h-4 shrink-0" /><span>System Settings</span>
+                  <Settings className="w-4 h-4 shrink-0" /><span>Configuration</span>
                 </button>
               )}
             </>
@@ -256,7 +262,7 @@ export default function Sidebar({ currentUser, activeTab, setActiveTab, onLogout
 
               {!settings.mission && !settings.vision && !settings.motto && !settings.address && (
                 <p className="text-sm text-neutral-400 text-center py-4">
-                  No cooperative info set yet. Go to System Settings → App Branding to add it.
+                  No cooperative info set yet. Go to Configuration → Branding & Identity to add it.
                 </p>
               )}
             </div>

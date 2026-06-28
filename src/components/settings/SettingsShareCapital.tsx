@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { safeReadJson } from '../../lib/safe-fetch.ts';
 import { AppSettings } from '../../types.ts';
 import { Save, Loader } from 'lucide-react';
+import InfoButton from '../InfoButton.tsx';
 
 interface Props { token: string; settings: AppSettings; }
 
@@ -55,7 +56,10 @@ export default function SettingsShareCapital({ token, settings }: Props) {
   return (
     <div className="space-y-4">
       <div>
-        <h2 className="text-xs font-bold text-neutral-500 uppercase tracking-widest">Share Capital Rules</h2>
+        <div className="flex items-center gap-2">
+          <h2 className="text-xs font-bold text-neutral-500 uppercase tracking-widest">Share Capital Rules</h2>
+          <InfoButton text="Share capital is the membership investment each employee puts into the cooperative. Set the value per share and the minimum number of shares required to become a member." />
+        </div>
         <p className="text-[11px] text-neutral-400 mt-1">Configure the par value per share and contribution requirements for cooperative membership.</p>
       </div>
 

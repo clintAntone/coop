@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { safeReadJson } from '../../lib/safe-fetch.ts';
 import { AppSettings } from '../../types.ts';
 import { Plus, Pencil, Trash2, X, Loader, Save } from 'lucide-react';
+import InfoButton from '../InfoButton.tsx';
 
 interface Props { token: string; settings: AppSettings; }
 
@@ -100,13 +101,16 @@ function ApprovalMatrix({ token, settings }: Props) {
 
   return (
     <div className="space-y-3">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div>
-          <h3 className="text-xs font-bold text-neutral-700">Loan Approval Matrix</h3>
+          <div className="flex items-center gap-2">
+            <h3 className="text-xs font-bold text-neutral-700">Loan Approval Matrix</h3>
+            <InfoButton text="Defines which staff roles can approve loans and up to what amount. For example, a Cashier might approve small loans while a Manager handles larger ones." />
+          </div>
           <p className="text-[11px] text-neutral-400 mt-0.5">Defines which role can approve loans up to a maximum amount. Optionally scoped to a specific loan product.</p>
         </div>
         <button onClick={openAdd}
-          className="flex items-center gap-1.5 text-xs font-semibold bg-neutral-900 hover:bg-neutral-800 text-white py-1.5 px-3 rounded-lg cursor-pointer transition-colors">
+          className="flex items-center justify-center gap-1.5 text-xs font-semibold bg-neutral-900 hover:bg-neutral-800 text-white py-2 px-4 rounded-lg cursor-pointer transition-colors shrink-0 w-full sm:w-auto">
           <Plus className="w-3 h-3" /> Add Rule
         </button>
       </div>
@@ -234,7 +238,10 @@ function CoopParameters({ token }: { token: string }) {
   return (
     <div className="space-y-3">
       <div>
-        <h3 className="text-xs font-bold text-neutral-700">Cooperative Parameters</h3>
+        <div className="flex items-center gap-2">
+          <h3 className="text-xs font-bold text-neutral-700">Cooperative Parameters</h3>
+          <InfoButton text="Sets eligibility rules for borrowing — how long a member must be active before taking a loan, and the maximum loan amount relative to their savings." />
+        </div>
         <p className="text-[11px] text-neutral-400 mt-0.5">Loan eligibility rules applied system-wide.</p>
       </div>
 

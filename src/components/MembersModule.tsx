@@ -24,6 +24,7 @@ import {
   UserX,
   UserCheck,
 } from 'lucide-react';
+import InfoButton from './InfoButton.tsx';
 
 interface EligibleUser {
   id: number;
@@ -260,9 +261,12 @@ export default function MembersModule({ currentUser, token, settings }: MembersM
       {/* Top Header Controls */}
       <div className="flex items-start justify-between gap-3 mb-8">
         <div className="min-w-0">
-          <h1 className="text-xl font-medium tracking-tight text-neutral-900 font-sans">
-            Members Directory
-          </h1>
+          <div className="flex items-center gap-2">
+            <h1 className="text-xl font-medium tracking-tight text-neutral-900 font-sans">
+              Members Directory
+            </h1>
+            <InfoButton text="This is where you manage cooperative members. Add new members, view their savings and investment balances, and browse their full transaction history. Click any member row to open their account details." />
+          </div>
           <p className="text-xs text-neutral-400 mt-1 hidden sm:block">
             Register and coordinate cooperative members and their accounts.
           </p>
@@ -400,9 +404,10 @@ export default function MembersModule({ currentUser, token, settings }: MembersM
                           <div className="text-[11px] text-neutral-400 font-mono mt-0.5 truncate">{member.employeeId || '—'}</div>
                           <div className="flex items-center gap-2 mt-1">
                             {member.department && <span className="text-[10px] text-neutral-500">{member.department}</span>}
-                            <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold ${
-                              member.isActive ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-neutral-100 text-neutral-400 border border-neutral-200'
-                            }`}>{member.isActive ? 'Active' : 'Suspended'}</span>
+                            <span className={`inline-flex items-center gap-1 text-[10px] font-medium ${member.isActive ? 'text-emerald-600' : 'text-neutral-400'}`}>
+                              <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${member.isActive ? 'bg-emerald-500' : 'bg-neutral-400'}`} />
+                              {member.isActive ? 'Active' : 'Suspended'}
+                            </span>
                           </div>
                         </div>
                         {canManage && (

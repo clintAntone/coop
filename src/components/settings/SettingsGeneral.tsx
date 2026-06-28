@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { AppSettings } from '../../types.ts';
 import { safeReadJson } from '../../lib/safe-fetch.ts';
 import { Save, Loader, Upload, X, ImageIcon } from 'lucide-react';
+import InfoButton from '../InfoButton.tsx';
 
 const Field = ({ label, children }: { label: string; children: React.ReactNode }) => (
   <div>
@@ -94,7 +95,10 @@ export default function SettingsGeneral({ token, settings, onSettingsUpdated }: 
 
   return (
     <div className="space-y-6">
-      <h2 className="text-xs font-bold text-neutral-500 uppercase tracking-widest">App Branding</h2>
+      <div className="flex items-center gap-2">
+        <h2 className="text-xs font-bold text-neutral-500 uppercase tracking-widest">App Branding</h2>
+        <InfoButton text="Configure how your cooperative appears in the system — name, logo, tagline, mission, vision, and contact information. These details appear on printed documents and the login screen." />
+      </div>
 
       {/* Identity */}
       <div className="space-y-4">
@@ -151,8 +155,8 @@ export default function SettingsGeneral({ token, settings, onSettingsUpdated }: 
         </div>
 
         <Field label="Motto">
-          <input type="text" value={motto} onChange={e => setMotto(e.target.value)}
-            className={inputCls} placeholder="Unity, Service, Progress" />
+          <textarea rows={2} value={motto} onChange={e => setMotto(e.target.value)}
+            className={textareaCls} placeholder="Unity, Service, Progress" />
         </Field>
       </div>
 
@@ -161,12 +165,12 @@ export default function SettingsGeneral({ token, settings, onSettingsUpdated }: 
         <p className="text-[10px] font-bold uppercase tracking-wider text-neutral-400">Mission & Vision</p>
 
         <Field label="Mission Statement">
-          <textarea rows={3} value={mission} onChange={e => setMission(e.target.value)}
+          <textarea rows={6} value={mission} onChange={e => setMission(e.target.value)}
             className={textareaCls} placeholder="To empower our members through accessible financial services and cooperative values..." />
         </Field>
 
         <Field label="Vision Statement">
-          <textarea rows={3} value={vision} onChange={e => setVision(e.target.value)}
+          <textarea rows={6} value={vision} onChange={e => setVision(e.target.value)}
             className={textareaCls} placeholder="A thriving cooperative community where every member achieves financial well-being..." />
         </Field>
       </div>
@@ -176,19 +180,33 @@ export default function SettingsGeneral({ token, settings, onSettingsUpdated }: 
         <p className="text-[10px] font-bold uppercase tracking-wider text-neutral-400">Contact & Location</p>
 
         <Field label="Office Address">
-          <textarea rows={2} value={address} onChange={e => setAddress(e.target.value)}
+          <textarea rows={3} value={address} onChange={e => setAddress(e.target.value)}
             className={textareaCls} placeholder="123 Main Street, City, Province" />
         </Field>
 
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <Field label="Contact Email">
             <input type="email" value={contactEmail} onChange={e => setContactEmail(e.target.value)}
               className={inputCls} placeholder="info@cooperative.ph" />
           </Field>
-          <Field label="Contact Phone">
-            <input type="text" value={contactPhone} onChange={e => setContactPhone(e.target.value)}
-              className={inputCls} placeholder="+63 2 8xxx xxxx" />
-          </Field>
+          <div>
+            <label className="block text-xs font-semibold text-neutral-600 mb-1.5">Contact Phone</label>
+            <input
+              type="tel"
+              value={contactPhone}
+              onChange={e => {
+                // Allow digits, spaces, +, -, (, )
+                const val = e.target.value.replace(/[^0-9\s\+\-\(\)]/g, '');
+                setContactPhone(val);
+              }}
+              className={inputCls}
+              placeholder="+63 917 123 4567"
+            />
+            {contactPhone && !/^[\d\s\+\-\(\)]{7,20}$/.test(contactPhone) && (
+              <p className="text-[10px] text-red-500 mt-1">Enter a valid phone number (e.g. +63 917 123 4567)</p>
+            )}
+            <p className="text-[10px] text-neutral-400 mt-1">Format: +63 9XX XXX XXXX</p>
+          </div>
         </div>
       </div>
 

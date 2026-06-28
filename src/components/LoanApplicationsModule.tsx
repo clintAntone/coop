@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { User, AppSettings } from '../types.ts';
+import InfoButton from './InfoButton.tsx';
 import {
   Loader, XCircle, RefreshCw, CheckCircle, Clock,
   XOctagon, ChevronDown, ChevronUp, FileText,
@@ -99,7 +100,10 @@ export default function LoanApplicationsModule({ currentUser, token, settings }:
       {/* Header */}
       <div className="flex items-center justify-between flex-wrap gap-y-2">
         <div>
-          <h1 className="text-xl font-medium tracking-tight text-neutral-900">Loan Applications</h1>
+          <div className="flex items-center gap-2">
+            <h1 className="text-xl font-medium tracking-tight text-neutral-900">Loan Applications</h1>
+            <InfoButton text="Review and process loan requests submitted by members. Approve or reject applications and add notes explaining your decision. Expand any row to see the full loan details including purpose and estimated monthly payment." />
+          </div>
           <p className="text-xs text-neutral-400 mt-1">Review and process member loan requests.</p>
         </div>
         <div className="flex items-center gap-2">

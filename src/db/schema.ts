@@ -54,6 +54,7 @@ export const transactions = pgTable('transactions', {
   description: text('description'),
   createdBy: integer('created_by').references(() => users.id).notNull(), // User/Teller ID who created it
   reversingTransactionId: integer('reversing_transaction_id'), // Self-reference inside code if this is a reversal or got reversed
+  receiptData: text('receipt_data'), // base64 data URL of deposit slip / receipt (nullable for cash payments)
   createdAt: timestamp('created_at').defaultNow().notNull(),
 });
 

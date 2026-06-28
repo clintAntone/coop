@@ -31,6 +31,7 @@ export interface AppSettings {
 export interface MemberBalances {
   savingsInCents: number;
   shareCapitalInCents: number;
+  loansOutstandingCents?: number;
 }
 
 export interface Member {
@@ -63,7 +64,7 @@ export interface MemberSummary {
 export interface Transaction {
   id: number;
   memberId: number;
-  transactionType: 'deposit' | 'withdrawal' | 'share_capital_contribution' | 'reversal' | 'manual_adjustment';
+  transactionType: 'deposit' | 'withdrawal' | 'share_capital_contribution' | 'reversal' | 'manual_adjustment' | 'loan_disbursement' | 'loan_payment';
   amount: number; // in cents
   status: 'completed' | 'reversed';
   referenceNumber: string;

@@ -1447,12 +1447,12 @@ export async function createApp() {
   app.post('/api/transactions', requireAuth, async (req: AuthRequest, res) => {
     try {
       const caller = req.dbUser!;
-      const { memberId, transactionType, amount, description, manualDebitCoa, manualCreditCoa } = req.body;
+      const { memberId, transactionType, amount, description, manualDebitCoa, manualCreditCoa, receiptData, isCashPayment } = req.body;
 
       // Role check: Only system managers, cashiers, or accountants can initiate transactions
-      if (transactionType === 'manual_adjustment') {
+      if (transactionType === 'manual_adjustment' || transactionType === 'loan_disbursement' || transactionType === 'loan_payment') {
         if (!['System Admin', 'Accounting Officer', 'Manager'].includes(caller.role)) {
-          return res.status(403).json({ error: 'Manual adjustments are strictly restricted to Accountant or Manager roles.' });
+          return res.status(403).json({ error: 'Loan and manual adjustment transactions are strictly restricted to Accountant or Manager roles.' });
         }
       } else {
         if (!['System Admin', 'Manager', 'Accounting Officer', 'Cashier'].includes(caller.role)) {
@@ -1464,6 +1464,13 @@ export async function createApp() {
         return res.status(400).json({ error: 'Validation Error: Required parameters memberId, transactionType, amount is missing.' });
       }
 
+      // Receipt required for non-manual transactions unless marked as cash payment
+      // loan_disbursement and loan_payment are staff-recorded like manual_adjustment — no receipt required
+      const requiresReceipt = transactionType !== 'manual_adjustment' && transactionType !== 'loan_disbursement' && transactionType !== 'loan_payment';
+      if (requiresReceipt && !isCashPayment && !receiptData) {
+        return res.status(400).json({ error: 'A deposit slip or receipt is required. Check "Manual cash payment" if no receipt is available.' });
+      }
+
       const amountInCents = Math.round(amount * 100);
 
       const txn = await createAndPostTransaction(
@@ -1473,7 +1480,8 @@ export async function createApp() {
         description,
         caller.id,
         manualDebitCoa,
-        manualCreditCoa
+        manualCreditCoa,
+        receiptData || null
       );
 
       await db.insert(auditLogs).values({

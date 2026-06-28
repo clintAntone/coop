@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { TrialBalanceItem, MemberSummary, AuditLog, User, AppSettings } from '../types.ts';
+import InfoButton from './InfoButton.tsx';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { motion } from 'motion/react';
 import {
@@ -206,7 +207,10 @@ export default function ReportsModule({ currentUser, token, settings }: ReportsM
           {activeSubTab === 'trial' && (
             <div className="space-y-6">
               <div>
-                <h2 className="text-sm font-semibold text-neutral-800 font-sans">Balance Check</h2>
+                <div className="flex items-center gap-2">
+                  <h2 className="text-sm font-semibold text-neutral-800 font-sans">Balance Check</h2>
+                  <InfoButton text="Shows a summary of all financial accounts with their total activity. When the green banner appears, all your records are correctly balanced. If you see red, contact your accountant." />
+                </div>
                 <p className="text-[11px] text-neutral-400 mt-1 leading-relaxed">This shows a summary of all financial activity. Green means everything is correct.</p>
               </div>
               {/* Double-Entry balanced alert */}
@@ -218,7 +222,7 @@ export default function ReportsModule({ currentUser, token, settings }: ReportsM
                 }`}
               >
                 <div className="flex items-center gap-3">
-                  <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${accountsAreBalanced ? 'bg-emerald-500' : 'bg-red-500'} text-white`}>
+                  <div className={`w-8 h-8 shrink-0 rounded-lg flex items-center justify-center ${accountsAreBalanced ? 'bg-emerald-500' : 'bg-red-500'} text-white`}>
                     <CheckCircle className="w-5 h-5 shrink-0" />
                   </div>
                   <div>
@@ -371,9 +375,12 @@ export default function ReportsModule({ currentUser, token, settings }: ReportsM
               <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 lg:gap-6 items-start">
                 {/* Aggregate Numeric Summary */}
                 <div className="bg-white border border-neutral-200/80 rounded-xl p-5 shadow-sm space-y-4">
-                  <h3 className="text-[10px] font-bold text-neutral-400 uppercase tracking-widest flex items-center gap-1">
-                    <Sparkles className="w-3.5 h-3.5 text-amber-500 shrink-0" /> Member Savings Overview
-                  </h3>
+                  <div className="flex items-center gap-2">
+                    <h3 className="text-[10px] font-bold text-neutral-400 uppercase tracking-widest flex items-center gap-1">
+                      <Sparkles className="w-3.5 h-3.5 text-amber-500 shrink-0" /> Member Savings Overview
+                    </h3>
+                    <InfoButton text="Shows the savings balance and membership investment for every member. Use the search box to find a specific member, and click column headers to sort." />
+                  </div>
                   <div className="space-y-4 divide-y divide-neutral-100">
                     <div className="pt-0">
                       <div className="text-[10px] uppercase text-neutral-400 font-semibold">Total Savings on Lock (2010)</div>
@@ -520,7 +527,10 @@ export default function ReportsModule({ currentUser, token, settings }: ReportsM
           {activeSubTab === 'audit' && (
             <div className="space-y-4">
               <div>
-                <h2 className="text-sm font-semibold text-neutral-800 font-sans">Activity Log</h2>
+                <div className="flex items-center gap-2">
+                  <h2 className="text-sm font-semibold text-neutral-800 font-sans">Activity Log</h2>
+                  <InfoButton text="A chronological record of all important actions taken in the system — approvals, role changes, reversals, and account creation. Useful for audits and accountability." />
+                </div>
                 <p className="text-[11px] text-neutral-400 mt-1 leading-relaxed">A record of all important actions taken in the system.</p>
               </div>
               <div className="bg-white border border-neutral-200/80 rounded-xl shadow-xl shadow-neutral-200/25 overflow-hidden">
