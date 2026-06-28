@@ -55,6 +55,7 @@ export const transactions = pgTable('transactions', {
   createdBy: integer('created_by').references(() => users.id).notNull(), // User/Teller ID who created it
   reversingTransactionId: integer('reversing_transaction_id'), // Self-reference inside code if this is a reversal or got reversed
   receiptData: text('receipt_data'), // base64 data URL of deposit slip / receipt (nullable for cash payments)
+  loanApplicationId: integer('loan_application_id').references(() => loanApplications.id),
   createdAt: timestamp('created_at').defaultNow().notNull(),
 });
 
@@ -178,10 +179,11 @@ export const loanApplications = pgTable('loan_applications', {
   requestedAmountCents: integer('requested_amount_cents').notNull(),
   termMonths: integer('term_months').notNull(),
   purpose: text('purpose').notNull(),
-  status: text('status').default('pending').notNull(), // 'pending' | 'approved' | 'rejected' | 'cancelled'
+  status: text('status').default('pending').notNull(), // 'pending' | 'approved' | 'rejected' | 'cancelled' | 'disbursed'
   reviewNotes: text('review_notes'),
   reviewedBy: integer('reviewed_by').references(() => users.id),
   reviewedAt: timestamp('reviewed_at'),
+  disbursedAt: timestamp('disbursed_at', { withTimezone: true }),
   createdAt: timestamp('created_at').defaultNow().notNull(),
   updatedAt: timestamp('updated_at').defaultNow().notNull(),
 });

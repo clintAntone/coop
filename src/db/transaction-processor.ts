@@ -170,7 +170,8 @@ export async function createAndPostTransaction(
   createdById: number,
   manualDebitCoa?: string, // Only for manual adjustments
   manualCreditCoa?: string, // Only for manual adjustments
-  receiptData?: string // base64 data URL of deposit slip / receipt
+  receiptData?: string, // base64 data URL of deposit slip / receipt
+  loanApplicationId?: number // Link transaction to a loan application
 ): Promise<any> {
   if (amountInCents <= 0) {
     throw new Error("Transaction amount must be greater than zero.");
@@ -214,6 +215,7 @@ export async function createAndPostTransaction(
         description,
         createdBy: createdById,
         receiptData: receiptData || null,
+        loanApplicationId: loanApplicationId || null,
       })
       .returning();
 

@@ -23,6 +23,7 @@ import {
   Pencil,
   UserX,
   UserCheck,
+  HandCoins,
 } from 'lucide-react';
 import InfoButton from './InfoButton.tsx';
 
@@ -72,6 +73,7 @@ export default function MembersModule({ currentUser, token, settings }: MembersM
   const [activeDrawerMember, setActiveDrawerMember] = useState<Member | null>(null);
   const [drawerDetails, setDrawerDetails] = useState<any | null>(null);
   const [drawerLedger, setDrawerLedger] = useState<LedgerLine[]>([]);
+  const [drawerActiveLoan, setDrawerActiveLoan] = useState<any | null>(null);
   const [drawerLoading, setDrawerLoading] = useState(false);
 
   // Row action menu + status confirmation modal
@@ -227,23 +229,25 @@ export default function MembersModule({ currentUser, token, settings }: MembersM
     setDrawerLoading(true);
     setDrawerDetails(null);
     setDrawerLedger([]);
+    setDrawerActiveLoan(null);
 
     try {
-      // 1. Fetch member detail with derived balances
-      const detailRes = await fetch(`/api/members/${member.id}`, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      if (!detailRes.ok) throw new Error('Could not get member balances.');
-      const details = await detailRes.json();
-      setDrawerDetails(details);
+      const headers = { Authorization: `Bearer ${token}` };
+      const [detailRes, ledgerRes, activeLoanRes] = await Promise.all([
+        fetch(`/api/members/${member.id}`, { headers }),
+        fetch(`/api/reports/member-ledger/${member.id}`, { headers }),
+        fetch(`/api/loan-applications/active?memberId=${member.id}`, { headers }),
+      ]);
 
-      // 2. Fetch member statement transaction ledger entries
-      const ledgerRes = await fetch(`/api/reports/member-ledger/${member.id}`, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      if (!ledgerRes.ok) throw new Error('Could not get member statement.');
-      const ledger = await ledgerRes.json();
-      setDrawerLedger(ledger);
+      if (!detailRes.ok) throw new Error('Could not get member balances.');
+      setDrawerDetails(await detailRes.json());
+
+      if (ledgerRes.ok) setDrawerLedger(await ledgerRes.json());
+
+      if (activeLoanRes.ok) {
+        const loans = await activeLoanRes.json();
+        setDrawerActiveLoan(loans[0] ?? null); // most recent active loan
+      }
     } catch (err: any) {
       console.error(err);
     } finally {
@@ -629,6 +633,57 @@ export default function MembersModule({ currentUser, token, settings }: MembersM
                       </div>
                     </div>
                   </div>
+
+                  {/* Active Loan */}
+                  {(drawerActiveLoan || (drawerDetails?.balances?.loansOutstandingCents > 0)) && (
+                    <div className="space-y-2.5">
+                      <h3 className="text-[10px] font-bold text-neutral-400 uppercase tracking-widest">Active Loan</h3>
+                      <div className={`rounded-lg p-4 border text-xs flex flex-col gap-3 ${drawerActiveLoan ? 'bg-amber-50 border-amber-200' : 'bg-neutral-50 border-neutral-200'}`}>
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            <HandCoins className="w-4 h-4 text-amber-500 shrink-0" />
+                            <span className="font-semibold text-neutral-800">{drawerActiveLoan?.loanProductName ?? 'Loan'}</span>
+                          </div>
+                          <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-amber-100 text-amber-700">Active</span>
+                        </div>
+                        <div className="grid grid-cols-2 gap-3">
+                          <div>
+                            <div className="text-[10px] uppercase text-neutral-400 font-semibold mb-0.5">Outstanding Balance</div>
+                            <div className="font-mono font-bold text-amber-700 text-[15px]">
+                              {settings.currencySymbol}{((drawerActiveLoan?.outstandingCents ?? drawerDetails?.balances?.loansOutstandingCents ?? 0) / 100).toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                            </div>
+                          </div>
+                          {drawerActiveLoan && (
+                            <div>
+                              <div className="text-[10px] uppercase text-neutral-400 font-semibold mb-0.5">Disbursed Amount</div>
+                              <div className="font-mono text-neutral-700">
+                                {settings.currencySymbol}{(drawerActiveLoan.requestedAmountCents / 100).toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                              </div>
+                            </div>
+                          )}
+                          {drawerActiveLoan?.termMonths && (
+                            <div>
+                              <div className="text-[10px] uppercase text-neutral-400 font-semibold mb-0.5">Term</div>
+                              <div className="text-neutral-700">{drawerActiveLoan.termMonths} months</div>
+                            </div>
+                          )}
+                          {drawerActiveLoan?.disbursedAt && (
+                            <div>
+                              <div className="text-[10px] uppercase text-neutral-400 font-semibold mb-0.5">Disbursed On</div>
+                              <div className="text-neutral-700 font-mono text-[10px]">
+                                {new Date(drawerActiveLoan.disbursedAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                        {drawerActiveLoan?.loanProductInterestBps && (
+                          <div className="text-[10px] text-neutral-500 border-t border-amber-100 pt-2">
+                            Interest rate: {drawerActiveLoan.loanProductInterestBps / 100}% / month
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
 
                   {/* Transaction History entries */}
                   <div className="space-y-2.5">

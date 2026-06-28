@@ -1447,7 +1447,7 @@ export async function createApp() {
   app.post('/api/transactions', requireAuth, async (req: AuthRequest, res) => {
     try {
       const caller = req.dbUser!;
-      const { memberId, transactionType, amount, description, manualDebitCoa, manualCreditCoa, receiptData, isCashPayment } = req.body;
+      const { memberId, transactionType, amount, description, manualDebitCoa, manualCreditCoa, receiptData, isCashPayment, loanApplicationId } = req.body;
 
       // Role check: Only system managers, cashiers, or accountants can initiate transactions
       if (transactionType === 'manual_adjustment' || transactionType === 'loan_disbursement' || transactionType === 'loan_payment') {
@@ -1481,7 +1481,8 @@ export async function createApp() {
         caller.id,
         manualDebitCoa,
         manualCreditCoa,
-        receiptData || null
+        receiptData || null,
+        loanApplicationId ? parseInt(loanApplicationId, 10) : undefined
       );
 
       await db.insert(auditLogs).values({
@@ -2157,6 +2158,187 @@ export async function createApp() {
         .orderBy(desc(loanApplications.createdAt));
 
       res.json(rows);
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // GET /api/loan-applications/active — All disbursed loans with outstanding balance
+  app.get('/api/loan-applications/active', requireAuth, async (req: AuthRequest, res) => {
+    try {
+      const allowed = ['System Admin', 'Manager', 'Accounting Officer', 'Cashier', 'Auditor'];
+      if (!allowed.includes(req.dbUser?.role || '')) return res.status(403).json({ error: 'Access denied.' });
+
+      // Fetch all disbursed loan applications with member + product info
+      const disbursedLoans = await db.select({
+        id: loanApplications.id,
+        memberId: loanApplications.memberId,
+        memberFirstName: members.firstName,
+        memberLastName: members.lastName,
+        memberEmployeeId: members.employeeId,
+        memberDepartment: members.department,
+        loanProductName: loanProducts.name,
+        loanProductInterestBps: loanProducts.interestRateBps,
+        requestedAmountCents: loanApplications.requestedAmountCents,
+        termMonths: loanApplications.termMonths,
+        purpose: loanApplications.purpose,
+        disbursedAt: loanApplications.disbursedAt,
+      }).from(loanApplications)
+        .leftJoin(members, eq(loanApplications.memberId, members.id))
+        .leftJoin(loanProducts, eq(loanApplications.loanProductId, loanProducts.id))
+        .where(
+          req.query.memberId
+            ? and(eq(loanApplications.status, 'disbursed'), eq(loanApplications.memberId, parseInt(req.query.memberId as string)))
+            : eq(loanApplications.status, 'disbursed')
+        )
+        .orderBy(desc(loanApplications.disbursedAt));
+
+      if (disbursedLoans.length === 0) return res.json([]);
+
+      const loanIds = disbursedLoans.map(l => l.id);
+
+      // Fetch all 1050 journal entry lines linked through transactions.loanApplicationId
+      const loanLines = await db.select({
+        loanApplicationId: transactions.loanApplicationId,
+        entryType: journalEntryLines.entryType,
+        amount: journalEntryLines.amount,
+      }).from(journalEntryLines)
+        .innerJoin(journalEntries, eq(journalEntryLines.journalEntryId, journalEntries.id))
+        .innerJoin(transactions, eq(journalEntries.transactionId, transactions.id))
+        .where(
+          and(
+            eq(journalEntryLines.coaCode, '1050'),
+            sql`${transactions.loanApplicationId} = ANY(ARRAY[${sql.join(loanIds.map(id => sql`${id}`), sql`, `)}]::int[])`
+          )
+        );
+
+      // Compute outstanding per loan: debits - credits on 1050
+      const outstandingMap: Record<number, number> = {};
+      for (const line of loanLines) {
+        const lid = line.loanApplicationId!;
+        if (!outstandingMap[lid]) outstandingMap[lid] = 0;
+        if (line.entryType === 'debit') outstandingMap[lid] += line.amount;
+        else outstandingMap[lid] -= line.amount;
+      }
+
+      const result = disbursedLoans.map(loan => ({
+        ...loan,
+        outstandingCents: outstandingMap[loan.id] ?? loan.requestedAmountCents,
+      }));
+
+      res.json(result);
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // POST /api/loan-applications/:id/disburse — Disburse an approved loan
+  app.post('/api/loan-applications/:id/disburse', requireAuth, async (req: AuthRequest, res) => {
+    try {
+      const allowed = ['System Admin', 'Manager', 'Accounting Officer'];
+      if (!allowed.includes(req.dbUser?.role || '')) return res.status(403).json({ error: 'Access denied.' });
+
+      const loanAppId = parseInt(req.params.id, 10);
+      const existing = await db.select().from(loanApplications).where(eq(loanApplications.id, loanAppId)).limit(1);
+      if (!existing[0]) return res.status(404).json({ error: 'Loan application not found.' });
+      if (existing[0].status !== 'approved') return res.status(409).json({ error: 'Only approved applications can be disbursed.' });
+
+      const loanApp = existing[0];
+      const caller = req.dbUser!;
+
+      // Post disbursement transaction
+      await createAndPostTransaction(
+        loanApp.memberId,
+        'loan_disbursement',
+        loanApp.requestedAmountCents,
+        `Loan disbursement for application #${loanAppId}`,
+        caller.id,
+        undefined,
+        undefined,
+        undefined,
+        loanAppId
+      );
+
+      // Update loan application status to disbursed
+      const [updated] = await db.update(loanApplications)
+        .set({ status: 'disbursed', disbursedAt: new Date(), updatedAt: new Date() })
+        .where(eq(loanApplications.id, loanAppId))
+        .returning();
+
+      await db.insert(auditLogs).values({
+        userId: caller.id,
+        action: 'LOAN_DISBURSED',
+        details: `Disbursed loan application #${loanAppId} for member ${loanApp.memberId}, amount ${loanApp.requestedAmountCents} cents.`,
+      });
+
+      res.json(updated);
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // POST /api/loan-applications/:id/payment — Record a loan repayment
+  app.post('/api/loan-applications/:id/payment', requireAuth, async (req: AuthRequest, res) => {
+    try {
+      const allowed = ['System Admin', 'Manager', 'Accounting Officer', 'Cashier'];
+      if (!allowed.includes(req.dbUser?.role || '')) return res.status(403).json({ error: 'Access denied.' });
+
+      const loanAppId = parseInt(req.params.id, 10);
+      const existing = await db.select().from(loanApplications).where(eq(loanApplications.id, loanAppId)).limit(1);
+      if (!existing[0]) return res.status(404).json({ error: 'Loan application not found.' });
+      if (existing[0].status !== 'disbursed') return res.status(409).json({ error: 'Payments can only be recorded for active (disbursed) loans.' });
+
+      const loanApp = existing[0];
+      const { amountCents, notes } = req.body;
+      if (!amountCents || amountCents <= 0) return res.status(400).json({ error: 'amountCents must be greater than zero.' });
+
+      const caller = req.dbUser!;
+
+      const txn = await createAndPostTransaction(
+        loanApp.memberId,
+        'loan_payment',
+        amountCents,
+        notes || 'Loan payment',
+        caller.id,
+        undefined,
+        undefined,
+        undefined,
+        loanAppId
+      );
+
+      await db.insert(auditLogs).values({
+        userId: caller.id,
+        action: 'LOAN_PAYMENT',
+        details: `Recorded loan payment of ${amountCents} cents for loan application #${loanAppId}.`,
+      });
+
+      res.json({ success: true, transaction: txn });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // GET /api/loan-applications/:id/payments — All transactions linked to a loan
+  app.get('/api/loan-applications/:id/payments', requireAuth, async (req: AuthRequest, res) => {
+    try {
+      const allowed = ['System Admin', 'Manager', 'Accounting Officer', 'Cashier', 'Auditor'];
+      if (!allowed.includes(req.dbUser?.role || '')) return res.status(403).json({ error: 'Access denied.' });
+
+      const loanAppId = parseInt(req.params.id, 10);
+
+      const txns = await db.select({
+        id: transactions.id,
+        transactionType: transactions.transactionType,
+        amount: transactions.amount,
+        referenceNumber: transactions.referenceNumber,
+        description: transactions.description,
+        status: transactions.status,
+        createdAt: transactions.createdAt,
+      }).from(transactions)
+        .where(eq(transactions.loanApplicationId, loanAppId))
+        .orderBy(desc(transactions.createdAt));
+
+      res.json(txns);
     } catch (err: any) {
       res.status(500).json({ error: err.message });
     }
