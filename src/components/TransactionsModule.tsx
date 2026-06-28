@@ -17,7 +17,12 @@ import {
   RefreshCw,
   Coins,
   Download,
-  Printer
+  Printer,
+  ArrowDownCircle,
+  ArrowUpCircle,
+  TrendingUp,
+  Edit3,
+  RotateCcw
 } from 'lucide-react';
 
 interface TransactionsModuleProps {
@@ -289,10 +294,10 @@ export default function TransactionsModule({ currentUser, token, settings }: Tra
       <div className="flex items-start justify-between gap-3 mb-6 md:mb-8">
         <div className="min-w-0">
           <h1 className="text-xl font-medium tracking-tight text-neutral-900 font-sans">
-            Postings & Journal Logs
+            Transactions
           </h1>
           <p className="text-xs text-neutral-400 mt-1 hidden sm:block">
-            Review detailed financial transaction logs, search references, or post new double-entry activities.
+            View all recorded transactions, search by member or reference, or record a new transaction.
           </p>
         </div>
 
@@ -302,8 +307,8 @@ export default function TransactionsModule({ currentUser, token, settings }: Tra
             className="shrink-0 flex items-center gap-1.5 bg-neutral-900 hover:bg-neutral-800 text-white text-xs font-semibold py-2 px-3 rounded-lg shadow-sm transition-all cursor-pointer"
           >
             <Plus className="w-3.5 h-3.5" />
-            <span className="hidden sm:inline">Post New Transaction</span>
-            <span className="sm:hidden">Post</span>
+            <span className="hidden sm:inline">Record Transaction</span>
+            <span className="sm:hidden">Record</span>
           </button>
         )}
       </div>
@@ -313,7 +318,7 @@ export default function TransactionsModule({ currentUser, token, settings }: Tra
         <div className="flex gap-1 mb-6 bg-neutral-100 rounded-xl p-1 w-fit">
           <button onClick={() => setActiveTab('ledger')}
             className={`text-xs font-semibold px-4 py-1.5 rounded-lg transition-colors cursor-pointer ${activeTab === 'ledger' ? 'bg-white shadow text-neutral-900' : 'text-neutral-500 hover:text-neutral-700'}`}>
-            Ledger
+            Transactions
           </button>
           <button onClick={() => { setActiveTab('deposits'); fetchDepositRequests(); }}
             className={`text-xs font-semibold px-4 py-1.5 rounded-lg transition-colors cursor-pointer flex items-center gap-1.5 ${activeTab === 'deposits' ? 'bg-white shadow text-neutral-900' : 'text-neutral-500 hover:text-neutral-700'}`}>
@@ -376,14 +381,14 @@ export default function TransactionsModule({ currentUser, token, settings }: Tra
         {isLoading ? (
           <div className="py-24 flex flex-col items-center justify-center gap-3">
             <Loader className="w-6 h-6 text-neutral-400 animate-spin" />
-            <span className="text-xs text-neutral-500 font-medium">Reconciling General Ledger...</span>
+            <span className="text-xs text-neutral-500 font-medium">Loading transactions...</span>
           </div>
         ) : filteredTxns.length === 0 ? (
           <div className="py-24 text-center max-w-xs mx-auto flex flex-col items-center gap-3">
             <HelpCircle className="w-10 h-10 text-neutral-300" />
-            <h3 className="text-xs font-semibold text-neutral-800">No Postings Found</h3>
+            <h3 className="text-xs font-semibold text-neutral-800">No Transactions Found</h3>
             <p className="text-[11px] text-neutral-400">
-              {searchTerm ? 'No results matched this search filter.' : 'Transactions initiated on tellers appear immediately on this ledger list.'}
+              {searchTerm ? 'No results matched this search filter.' : 'Transactions recorded by staff will appear here immediately.'}
             </p>
           </div>
         ) : (
@@ -402,18 +407,18 @@ export default function TransactionsModule({ currentUser, token, settings }: Tra
                           <span className="text-xs font-semibold text-neutral-900 truncate">{txn.memberName || '—'}</span>
                           {isReversed && (
                             <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold shrink-0 bg-red-50 text-red-500 border border-red-200">
-                              Reversed
+                              Undone
                             </span>
                           )}
                         </div>
                         <div className="text-[10px] text-neutral-400 font-mono mt-0.5">{txn.employeeId}</div>
                         <div className="flex items-center gap-2 mt-1.5 flex-wrap">
                           <span className="text-[10px] font-semibold">
-                            {txn.transactionType === 'deposit' && <span className="text-emerald-700">Savings Deposit</span>}
-                            {txn.transactionType === 'withdrawal' && <span className="text-amber-700">Savings Withdrawal</span>}
-                            {txn.transactionType === 'share_capital_contribution' && <span className="text-blue-700">Share Capital</span>}
-                            {txn.transactionType === 'manual_adjustment' && <span className="text-neutral-500">Manual Adjustment</span>}
-                            {txn.transactionType === 'reversal' && <span className="text-red-600">Reversing Entry</span>}
+                            {txn.transactionType === 'deposit' && <span className="inline-flex items-center gap-1 text-emerald-700"><ArrowDownCircle className="w-3 h-3" />Deposit</span>}
+                            {txn.transactionType === 'withdrawal' && <span className="inline-flex items-center gap-1 text-red-600"><ArrowUpCircle className="w-3 h-3" />Withdrawal</span>}
+                            {txn.transactionType === 'share_capital_contribution' && <span className="inline-flex items-center gap-1 text-blue-700"><TrendingUp className="w-3 h-3" />Membership Investment</span>}
+                            {txn.transactionType === 'manual_adjustment' && <span className="inline-flex items-center gap-1 text-amber-600"><Edit3 className="w-3 h-3" />Custom Entry</span>}
+                            {txn.transactionType === 'reversal' && <span className="inline-flex items-center gap-1 text-neutral-500"><RotateCcw className="w-3 h-3" />Undone</span>}
                           </span>
                           <span className="text-[9px] text-neutral-400 font-mono">{date}</span>
                         </div>
@@ -425,7 +430,7 @@ export default function TransactionsModule({ currentUser, token, settings }: Tra
                         </div>
                         {canReverse && (
                           <button onClick={() => setReversalTarget(txn)} className="text-[11px] text-red-500 font-semibold mt-1 cursor-pointer">
-                            Reverse
+                            Undo
                           </button>
                         )}
                       </div>
@@ -466,11 +471,11 @@ export default function TransactionsModule({ currentUser, token, settings }: Tra
                           <div className="font-mono text-[9px] text-neutral-400">ID: {txn.employeeId}</div>
                         </td>
                         <td className="py-3 px-4 font-sans font-medium">
-                          {txn.transactionType === 'deposit' && <span className="text-emerald-700">Savings Deposit</span>}
-                          {txn.transactionType === 'withdrawal' && <span className="text-amber-800">Savings Withdrawal</span>}
-                          {txn.transactionType === 'share_capital_contribution' && <span className="text-blue-700">Share Capital Posting</span>}
-                          {txn.transactionType === 'manual_adjustment' && <span className="text-neutral-500 font-mono text-[10px]">Adjusting ledger</span>}
-                          {txn.transactionType === 'reversal' && <span className="text-red-700 uppercase font-mono text-[9px]">Reversing entry</span>}
+                          {txn.transactionType === 'deposit' && <span className="inline-flex items-center gap-1.5 text-emerald-700"><ArrowDownCircle className="w-3.5 h-3.5 shrink-0" />Deposit</span>}
+                          {txn.transactionType === 'withdrawal' && <span className="inline-flex items-center gap-1.5 text-red-600"><ArrowUpCircle className="w-3.5 h-3.5 shrink-0" />Withdrawal</span>}
+                          {txn.transactionType === 'share_capital_contribution' && <span className="inline-flex items-center gap-1.5 text-blue-700"><TrendingUp className="w-3.5 h-3.5 shrink-0" />Membership Investment</span>}
+                          {txn.transactionType === 'manual_adjustment' && <span className="inline-flex items-center gap-1.5 text-amber-600"><Edit3 className="w-3.5 h-3.5 shrink-0" />Custom Entry</span>}
+                          {txn.transactionType === 'reversal' && <span className="inline-flex items-center gap-1.5 text-neutral-500"><RotateCcw className="w-3.5 h-3.5 shrink-0" />Undone</span>}
                         </td>
                         <td className="py-3 px-4 text-neutral-500 leading-relaxed max-w-xs truncate" title={txn.description || ''}>
                           {txn.description || '—'}
@@ -481,14 +486,14 @@ export default function TransactionsModule({ currentUser, token, settings }: Tra
                         </td>
                         <td className="py-3 px-4 text-center">
                           <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold ${isReversed ? 'bg-red-50 text-red-500 border border-red-200 line-through' : 'bg-emerald-50 text-emerald-700 border border-emerald-100'}`}>
-                            {isReversed ? 'Reversed' : 'Completed'}
+                            {isReversed ? 'Undone' : 'Completed'}
                           </span>
                         </td>
                         {['System Admin', 'Manager', 'Accounting Officer'].includes(currentUser.role) && (
                           <td className="py-3 px-4 text-right">
                             {!isReversed && txn.transactionType !== 'reversal' && (
                               <button onClick={() => setReversalTarget(txn)} className="text-[11px] text-red-500 hover:text-red-700 hover:underline font-semibold cursor-pointer">
-                                Reverse
+                                Undo
                               </button>
                             )}
                           </td>
@@ -690,7 +695,7 @@ export default function TransactionsModule({ currentUser, token, settings }: Tra
             >
               <div className="p-5 border-b border-neutral-150 bg-neutral-50/50 flex items-center justify-between">
                 <h2 className="text-sm font-semibold text-neutral-900 font-sans">
-                  Post Double-Entry Activity
+                  Record a Transaction
                 </h2>
                 <button
                   onClick={() => setShowPostingModal(false)}
@@ -767,7 +772,7 @@ export default function TransactionsModule({ currentUser, token, settings }: Tra
                 {/* Select Type */}
                 <div className="space-y-1">
                   <label className="block text-[10px] uppercase font-bold text-neutral-400">
-                    Ledger Posting Type
+                    Transaction Type
                   </label>
                   <select
                     value={transactionType}
@@ -775,11 +780,11 @@ export default function TransactionsModule({ currentUser, token, settings }: Tra
                     className="w-full text-sm border border-neutral-200 rounded-lg px-3 py-2 h-9 bg-white text-neutral-800 focus:outline-none focus:ring-1 focus:ring-neutral-300 cursor-pointer"
                     required
                   >
-                    <option value="deposit">Deposit to Savings Account (Credit 2010 / Debit 1010)</option>
-                    <option value="withdrawal">Withdrawal from Savings Account (Debit 2010 / Credit 1010)</option>
-                    <option value="share_capital_contribution">Share Capital Contribution (Credit 3010 / Debit 1010)</option>
+                    <option value="deposit">Deposit</option>
+                    <option value="withdrawal">Withdrawal</option>
+                    <option value="share_capital_contribution">Membership Investment</option>
                     {['System Admin', 'Accounting Officer', 'Manager'].includes(currentUser.role) && (
-                      <option value="manual_adjustment">Manual Adjusted Journal Heading (Custom COAs)</option>
+                      <option value="manual_adjustment">Custom Entry</option>
                     )}
                   </select>
                 </div>
@@ -789,7 +794,7 @@ export default function TransactionsModule({ currentUser, token, settings }: Tra
                   <div className="grid grid-cols-2 gap-4 bg-neutral-50 p-3 rounded-lg border border-neutral-200/55">
                     <div className="space-y-1">
                       <label className="block text-[9px] uppercase font-bold text-neutral-400">
-                        Debit Account (Receiving)
+                        Money Out Account
                       </label>
                       <select
                         value={manualDebitCoa}
@@ -803,7 +808,7 @@ export default function TransactionsModule({ currentUser, token, settings }: Tra
                     </div>
                     <div className="space-y-1">
                       <label className="block text-[9px] uppercase font-bold text-neutral-400">
-                        Credit Account (Paying)
+                        Money In Account
                       </label>
                       <select
                         value={manualCreditCoa}
@@ -821,7 +826,7 @@ export default function TransactionsModule({ currentUser, token, settings }: Tra
                 {/* Amount */}
                 <div className="space-y-1">
                   <label className="block text-[10px] uppercase font-bold text-neutral-400">
-                    Posting Amount ({settings.currencySymbol})
+                    Amount ({settings.currencySymbol})
                   </label>
                   <div className="relative">
                     <span className="absolute left-3 top-2 text-xs text-neutral-400 font-mono">{settings.currencySymbol}</span>
@@ -841,10 +846,10 @@ export default function TransactionsModule({ currentUser, token, settings }: Tra
                 {/* Description Memo */}
                 <div className="space-y-1">
                   <label className="block text-[10px] uppercase font-bold text-neutral-400">
-                    Posting Description Memo
+                    Description / Notes
                   </label>
                   <textarea
-                    placeholder="Provide detailed description or banking receipt reference info..."
+                    placeholder="Add a note or reference (e.g. receipt number, reason for transaction)..."
                     className="w-full text-xs border border-neutral-200 rounded-md p-2 bg-white focus:outline-none text-neutral-800 h-20 leading-relaxed"
                     value={description}
                     onChange={(e) => setDescription(e.target.value)}
@@ -871,7 +876,7 @@ export default function TransactionsModule({ currentUser, token, settings }: Tra
                     disabled={posting}
                     className="flex items-center gap-1.5 bg-neutral-900 hover:bg-neutral-800 disabled:bg-neutral-300 text-white text-xs font-semibold py-2 px-4 rounded-md shadow-sm transition-all cursor-pointer whitespace-nowrap"
                   >
-                    {posting ? 'Posting...' : 'Commit Transaction'}
+                    {posting ? 'Saving...' : 'Record Transaction'}
                   </button>
                 </div>
               </form>
@@ -894,7 +899,7 @@ export default function TransactionsModule({ currentUser, token, settings }: Tra
               <div className="p-4 border-b border-neutral-150 bg-neutral-50/50 flex items-center justify-between text-neutral-900">
                 <div className="flex items-center gap-1.5 font-sans font-semibold text-xs">
                   <ShieldAlert className="w-4 h-4 text-red-500 shrink-0" />
-                  <span>Immutability Reversal Gate</span>
+                  <span>Undo Transaction</span>
                 </div>
                 <button
                   onClick={() => setReversalTarget(null)}
@@ -907,20 +912,20 @@ export default function TransactionsModule({ currentUser, token, settings }: Tra
               <form onSubmit={handleReverseTransaction} className="p-5 space-y-4">
                 <div className="text-xs text-neutral-600 leading-relaxed bg-red-50/50 border border-red-100 p-3 rounded-lg space-y-1.5">
                   <p>
-                    You are reversing transaction <strong className="font-mono text-neutral-950">{reversalTarget.referenceNumber}</strong> in the value of <strong>{settings.currencySymbol}{(reversalTarget.amount/100).toFixed(2)}</strong>.
+                    You are undoing transaction <strong className="font-mono text-neutral-950">{reversalTarget.referenceNumber}</strong> for <strong>{settings.currencySymbol}{(reversalTarget.amount/100).toFixed(2)}</strong>.
                   </p>
                   <p className="text-[10px] text-neutral-500">
-                    Our cooperative ledger is immutable. Reversing this transaction generates an opposing double-entry journal headed under a balanced ledger code. The original journal lines remain visible and linked showing complete auditing integrity.
+                    This will create an opposing entry to cancel out the original transaction. The original record is kept for audit purposes.
                   </p>
                 </div>
 
                 <div className="space-y-1">
                   <label className="block text-[10px] uppercase font-bold text-neutral-400">
-                    Reversal Reason (Auditing Required)
+                    Reason (Required)
                   </label>
                   <input
                     type="text"
-                    placeholder="Enter explicit explanation for auditors..."
+                    placeholder="Why is this transaction being undone?"
                     className="w-full text-xs border border-neutral-200 p-2 rounded-md bg-white text-neutral-800"
                     value={reversalReason}
                     onChange={(e) => setReversalReason(e.target.value)}
@@ -947,7 +952,7 @@ export default function TransactionsModule({ currentUser, token, settings }: Tra
                     disabled={reversing}
                     className="bg-red-500 hover:bg-red-650 disabled:bg-neutral-300 text-white text-xs font-semibold py-2 px-4 rounded shadow-sm cursor-pointer"
                   >
-                    {reversing ? 'Posting counterpart lines...' : 'Post Reversal Ledger'}
+                    {reversing ? 'Processing...' : 'Confirm Undo'}
                   </button>
                 </div>
               </form>

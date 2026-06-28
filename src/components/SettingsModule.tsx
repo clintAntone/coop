@@ -49,7 +49,7 @@ const NAV: { group: string; items: { id: SectionId; label: string }[] }[] = [
   {
     group: 'System',
     items: [
-      { id: 'coa', label: 'Chart of Accounts' },
+      { id: 'coa', label: 'Account Categories' },
     ],
   },
 ];

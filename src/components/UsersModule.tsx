@@ -74,6 +74,8 @@ export default function UsersModule({ currentUser, token }: UsersModuleProps) {
   const [createdPinInfo, setCreatedPinInfo] = useState<{ name: string; email: string; pin: string } | null>(null);
   const [pinCopied, setPinCopied] = useState(false);
   const [statusConfirm, setStatusConfirm] = useState<{ userId: number; currentStatus: boolean; userName: string } | null>(null);
+  const [resetPwFlash, setResetPwFlash] = useState<{ userId: number; msg: string; ok: boolean } | null>(null);
+  const [resetPwLoading, setResetPwLoading] = useState<number | null>(null);
 
   const generatePin = () => {
     const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789';
@@ -191,6 +193,24 @@ export default function UsersModule({ currentUser, token }: UsersModuleProps) {
       setErrorMessage(err.message);
     } finally {
       setUpdatingUserId(null);
+    }
+  };
+
+  const handleResetPassword = async (userId: number) => {
+    setResetPwLoading(userId);
+    try {
+      const res = await fetch(`/api/users/${userId}/reset-password`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+      setResetPwFlash({ userId, msg: 'Reset email sent!', ok: true });
+    } catch (err: any) {
+      setResetPwFlash({ userId, msg: err.message, ok: false });
+    } finally {
+      setResetPwLoading(null);
+      setTimeout(() => setResetPwFlash(null), 4000);
     }
   };
 
@@ -386,12 +406,23 @@ export default function UsersModule({ currentUser, token }: UsersModuleProps) {
                           )
                         )
                       ) : (
-                        <button onClick={() => setStatusConfirm({ userId: user.id, currentStatus: user.isActive, userName: user.displayName || user.email })}
-                          title="Suspends this user's login access."
-                          className="flex items-center gap-1 border border-neutral-200 text-neutral-600 text-[11px] font-semibold py-1.5 px-3 rounded-lg cursor-pointer">
-                          <UserX className="w-3.5 h-3.5" />
-                          <span>Suspend</span>
-                        </button>
+                        <div className="flex items-center gap-1.5">
+                          {isAdmin && !user.uid.startsWith('manual:') && (
+                            <button onClick={() => handleResetPassword(user.id)} disabled={resetPwLoading === user.id}
+                              title="Send password reset email"
+                              className="w-8 h-8 flex items-center justify-center border border-neutral-200 text-neutral-400 hover:bg-amber-50 hover:text-amber-600 hover:border-amber-200 rounded-lg transition-colors cursor-pointer disabled:opacity-40">
+                              {resetPwLoading === user.id ? <Loader className="w-3.5 h-3.5 animate-spin" /> : <KeyRound className="w-3.5 h-3.5" />}
+                            </button>
+                          )}
+                          <button onClick={() => setStatusConfirm({ userId: user.id, currentStatus: user.isActive, userName: user.displayName || user.email })}
+                            title="Suspend user"
+                            className="w-8 h-8 flex items-center justify-center border border-neutral-200 text-neutral-400 hover:bg-red-50 hover:text-red-500 hover:border-red-200 rounded-lg transition-colors cursor-pointer">
+                            <UserX className="w-3.5 h-3.5" />
+                          </button>
+                          {resetPwFlash?.userId === user.id && (
+                            <span className={`text-[10px] font-medium ${resetPwFlash.ok ? 'text-green-600' : 'text-red-500'}`}>{resetPwFlash.msg}</span>
+                          )}
+                        </div>
                       )}
                     </div>
                   </div>
@@ -488,13 +519,26 @@ export default function UsersModule({ currentUser, token }: UsersModuleProps) {
                               )}
                             </div>
                           ) : (
-                            <button
-                              onClick={() => setStatusConfirm({ userId: user.id, currentStatus: user.isActive, userName: user.displayName || user.email })}
-                              title="Suspends this user's login access. They will be blocked from signing into the system until reactivated."
-                              className="flex items-center gap-1 border border-neutral-200 text-neutral-600 hover:bg-red-50 hover:text-red-600 hover:border-red-200 text-[11px] font-semibold py-1 px-3 rounded-md transition-colors cursor-pointer">
-                              <UserX className="w-3.5 h-3.5" />
-                              <span>Suspend</span>
-                            </button>
+                            <div className="flex items-center justify-end gap-1.5">
+                              {isAdmin && !user.uid.startsWith('manual:') && (
+                                <>
+                                  <button onClick={() => handleResetPassword(user.id)} disabled={resetPwLoading === user.id}
+                                    title="Send password reset email"
+                                    className="w-8 h-8 flex items-center justify-center border border-neutral-200 text-neutral-400 hover:bg-amber-50 hover:text-amber-600 hover:border-amber-200 rounded-md transition-colors cursor-pointer disabled:opacity-40">
+                                    {resetPwLoading === user.id ? <Loader className="w-3.5 h-3.5 animate-spin" /> : <KeyRound className="w-3.5 h-3.5" />}
+                                  </button>
+                                  {resetPwFlash?.userId === user.id && (
+                                    <span className={`text-[10px] font-medium whitespace-nowrap ${resetPwFlash.ok ? 'text-green-600' : 'text-red-500'}`}>{resetPwFlash.msg}</span>
+                                  )}
+                                </>
+                              )}
+                              <button
+                                onClick={() => setStatusConfirm({ userId: user.id, currentStatus: user.isActive, userName: user.displayName || user.email })}
+                                title="Suspend user"
+                                className="w-8 h-8 flex items-center justify-center border border-neutral-200 text-neutral-400 hover:bg-red-50 hover:text-red-500 hover:border-red-200 rounded-md transition-colors cursor-pointer">
+                                <UserX className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
                           )}
                         </td>
                       </tr>

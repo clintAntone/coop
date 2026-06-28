@@ -264,7 +264,7 @@ export default function MembersModule({ currentUser, token, settings }: MembersM
             Members Directory
           </h1>
           <p className="text-xs text-neutral-400 mt-1 hidden sm:block">
-            Register and coordinate cooperative members, system seats, and subsidiary ledgers.
+            Register and coordinate cooperative members and their accounts.
           </p>
         </div>
 
@@ -520,7 +520,7 @@ export default function MembersModule({ currentUser, token, settings }: MembersM
               <div className="p-4 lg:p-5 border-b border-neutral-150 bg-neutral-50/50 flex items-center justify-between">
                 <div>
                   <h2 className="text-sm font-semibold text-neutral-950 font-sans">
-                    Member Ledger Account
+                    Member Account
                   </h2>
                   <p className="text-[10px] text-neutral-400 uppercase tracking-wider font-mono">
                     ID: {activeDrawerMember.employeeId}
@@ -539,7 +539,7 @@ export default function MembersModule({ currentUser, token, settings }: MembersM
               {drawerLoading ? (
                 <div className="flex-grow flex flex-col items-center justify-center gap-3">
                   <Loader className="w-5 h-5 text-neutral-400 animate-spin" />
-                  <span className="text-xs text-neutral-500 font-medium">Calculating Ledger Values...</span>
+                  <span className="text-xs text-neutral-500 font-medium">Loading account details...</span>
                 </div>
               ) : (
                 <div className="flex-grow overflow-y-auto p-5 space-y-6">
@@ -595,9 +595,9 @@ export default function MembersModule({ currentUser, token, settings }: MembersM
                   {/* Derived Financial Balances (Single source of truth ledger sum boxes) */}
                   <div className="space-y-2.5">
                     <h3 className="text-[10px] font-bold text-neutral-400 uppercase tracking-widest flex items-center justify-between">
-                      <span>Ledger Account Balances</span>
+                      <span>Account Balances</span>
                       <span className="text-[9px] font-sans text-neutral-500 flex items-center border border-neutral-200 bg-neutral-100 rounded px-1 lowercase">
-                        *derived from ledger
+                        *calculated from transactions
                       </span>
                     </h3>
                     <div className="grid grid-cols-2 gap-3">
@@ -615,7 +615,7 @@ export default function MembersModule({ currentUser, token, settings }: MembersM
                       {/* Share Capital Balance Box */}
                       <div className="bg-white border border-neutral-350 rounded-lg p-3.5 flex flex-col justify-between">
                         <div className="text-[10px] font-bold text-neutral-400 uppercase tracking-wider">
-                          Paid Share Capital
+                          Membership Investment
                         </div>
                         <div className="mt-2.5 font-sans font-medium tracking-tight text-[18px] text-neutral-900">
                           {settings.currencySymbol}{drawerDetails?.balances ? (drawerDetails.balances.shareCapitalInCents / 100).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '0.00'}
@@ -625,10 +625,10 @@ export default function MembersModule({ currentUser, token, settings }: MembersM
                     </div>
                   </div>
 
-                  {/* Statement of Account Subsidiary Ledger Line entries */}
+                  {/* Transaction History entries */}
                   <div className="space-y-2.5">
                     <h3 className="text-[10px] font-bold text-neutral-400 uppercase tracking-widest">
-                      Subsidiary Ledger Statement
+                      Transaction History
                     </h3>
                     {drawerLedger.length === 0 ? (
                       <div className="p-8 border border-dashed border-neutral-2550 hover:bg-neutral-50/50 rounded-lg text-center">
@@ -642,8 +642,8 @@ export default function MembersModule({ currentUser, token, settings }: MembersM
                             <tr className="bg-neutral-100/80 text-neutral-500 text-[9px] font-bold border-b border-neutral-150 uppercase tracking-wider">
                               <th className="p-2 w-16">Date</th>
                               <th className="p-2">Description / COA</th>
-                              <th className="p-2 text-right">Debit</th>
-                              <th className="p-2 text-right">Credit</th>
+                              <th className="p-2 text-right">Money Out</th>
+                              <th className="p-2 text-right">Money In</th>
                             </tr>
                           </thead>
                           <tbody className="divide-y divide-neutral-150 bg-white">

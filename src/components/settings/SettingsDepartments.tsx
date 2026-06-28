@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { safeReadJson } from '../../lib/safe-fetch.ts';
-import { Plus, Pencil, Trash2, Check, X, Loader } from 'lucide-react';
+import { Plus, Pencil, Trash2, Loader, X } from 'lucide-react';
 
 interface Props { token: string; }
 
@@ -12,13 +12,13 @@ interface Dept {
   createdAt: string;
 }
 
+type Modal = { mode: 'add' } | { mode: 'edit'; item: Dept };
+
 export default function SettingsDepartments({ token }: Props) {
   const [items, setItems] = useState<Dept[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [editingId, setEditingId] = useState<number | null>(null);
-  const [editForm, setEditForm] = useState<Partial<Dept>>({});
-  const [showAdd, setShowAdd] = useState(false);
-  const [addForm, setAddForm] = useState({ name: '', code: '', isActive: true });
+  const [modal, setModal] = useState<Modal | null>(null);
+  const [form, setForm] = useState({ name: '', code: '', isActive: true });
   const [msg, setMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [isSaving, setIsSaving] = useState(false);
 
@@ -34,18 +34,29 @@ export default function SettingsDepartments({ token }: Props) {
 
   const flash = (type: 'success' | 'error', text: string) => { setMsg({ type, text }); };
 
+  const openAdd = () => {
+    setForm({ name: '', code: '', isActive: true });
+    setModal({ mode: 'add' });
+  };
+
+  const openEdit = (item: Dept) => {
+    setForm({ name: item.name, code: item.code, isActive: item.isActive });
+    setModal({ mode: 'edit', item });
+  };
+
+  const closeModal = () => setModal(null);
+
   const handleAdd = async () => {
-    if (!addForm.name.trim() || !addForm.code.trim()) return;
+    if (!form.name.trim() || !form.code.trim()) return;
     setIsSaving(true);
     try {
       const res = await fetch('/api/terms/departments', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify(addForm),
+        body: JSON.stringify(form),
       });
       if (!res.ok) throw new Error((await safeReadJson(res)).error);
-      setAddForm({ name: '', code: '', isActive: true });
-      setShowAdd(false);
+      closeModal();
       flash('success', 'Department added.');
       await fetchItems();
     } catch (err: any) { flash('error', err.message); }
@@ -58,10 +69,10 @@ export default function SettingsDepartments({ token }: Props) {
       const res = await fetch(`/api/terms/departments/${id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify(editForm),
+        body: JSON.stringify(form),
       });
       if (!res.ok) throw new Error((await safeReadJson(res)).error);
-      setEditingId(null);
+      closeModal();
       flash('success', 'Updated.');
       await fetchItems();
     } catch (err: any) { flash('error', err.message); }
@@ -78,6 +89,12 @@ export default function SettingsDepartments({ token }: Props) {
     } catch (err: any) { flash('error', err.message); }
   };
 
+  const handleSave = () => {
+    if (!modal) return;
+    if (modal.mode === 'add') handleAdd();
+    else handleUpdate(modal.item.id);
+  };
+
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
@@ -85,29 +102,16 @@ export default function SettingsDepartments({ token }: Props) {
           <h2 className="text-xs font-bold text-neutral-500 uppercase tracking-widest">Company Departments</h2>
           <p className="text-[11px] text-neutral-400 mt-1">Departments used for member classification. The code appears as a shorthand (e.g. HR, FIN, OPS).</p>
         </div>
-        <button onClick={() => setShowAdd(v => !v)}
+        <button onClick={openAdd}
           className="flex items-center gap-1.5 text-xs font-semibold bg-neutral-900 hover:bg-neutral-800 text-white py-1.5 px-3 rounded-lg cursor-pointer transition-colors">
           <Plus className="w-3 h-3" /> Add
         </button>
       </div>
 
-      {msg && <div className={`flex items-center justify-between gap-2 text-xs font-medium px-3 py-2 rounded-lg border ${msg.type === 'success' ? 'text-emerald-700 bg-emerald-50 border-emerald-200' : 'text-red-600 bg-red-50 border-red-200'}`}><span>{msg.text}</span><button type="button" onClick={() => setMsg(null)} className="shrink-0 opacity-60 hover:opacity-100 text-base leading-none cursor-pointer">×</button></div>}
-
-      {showAdd && (
-        <div className="flex items-center gap-2 p-3 bg-neutral-50 border border-neutral-200 rounded-lg">
-          <input value={addForm.name} onChange={e => setAddForm(f => ({ ...f, name: e.target.value }))}
-            placeholder="Department name *" autoFocus
-            className="flex-grow text-xs border border-neutral-200 rounded-md px-2.5 py-1.5 focus:outline-none focus:ring-1 focus:ring-neutral-400" />
-          <input value={addForm.code} onChange={e => setAddForm(f => ({ ...f, code: e.target.value.toUpperCase() }))}
-            placeholder="Code (e.g. HR)" maxLength={10}
-            className="w-24 text-xs border border-neutral-200 rounded-md px-2.5 py-1.5 focus:outline-none focus:ring-1 focus:ring-neutral-400 font-mono uppercase" />
-          <button onClick={handleAdd} disabled={isSaving || !addForm.name.trim() || !addForm.code.trim()}
-            className="flex items-center gap-1 text-xs font-semibold bg-neutral-900 text-white py-1.5 px-3 rounded-md cursor-pointer disabled:opacity-50">
-            {isSaving ? <Loader className="w-3 h-3 animate-spin" /> : <Check className="w-3 h-3" />} Save
-          </button>
-          <button onClick={() => setShowAdd(false)} className="text-neutral-400 hover:text-neutral-600 cursor-pointer">
-            <X className="w-4 h-4" />
-          </button>
+      {msg && (
+        <div className={`flex items-center justify-between gap-2 text-xs font-medium px-3 py-2 rounded-lg border ${msg.type === 'success' ? 'text-emerald-700 bg-emerald-50 border-emerald-200' : 'text-red-600 bg-red-50 border-red-200'}`}>
+          <span>{msg.text}</span>
+          <button type="button" onClick={() => setMsg(null)} className="shrink-0 opacity-60 hover:opacity-100 text-base leading-none cursor-pointer">×</button>
         </div>
       )}
 
@@ -129,56 +133,95 @@ export default function SettingsDepartments({ token }: Props) {
             <tbody className="divide-y divide-neutral-100">
               {items.map(item => (
                 <tr key={item.id} className="hover:bg-neutral-50/50">
-                  {editingId === item.id ? (
-                    <>
-                      <td className="py-2 px-3">
-                        <input value={editForm.name || ''} onChange={e => setEditForm(f => ({ ...f, name: e.target.value }))}
-                          className="w-full text-xs border border-neutral-300 rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-neutral-400" />
-                      </td>
-                      <td className="py-2 px-3">
-                        <input value={editForm.code || ''} onChange={e => setEditForm(f => ({ ...f, code: e.target.value.toUpperCase() }))}
-                          className="w-full text-xs border border-neutral-300 rounded px-2 py-1 font-mono uppercase focus:outline-none focus:ring-1 focus:ring-neutral-400" />
-                      </td>
-                      <td className="py-2 px-3 text-center">
-                        <input type="checkbox" checked={editForm.isActive ?? true} onChange={e => setEditForm(f => ({ ...f, isActive: e.target.checked }))} />
-                      </td>
-                      <td className="py-2 px-3">
-                        <div className="flex items-center gap-1.5 justify-end">
-                          <button onClick={() => handleUpdate(item.id)} disabled={isSaving} className="text-emerald-600 hover:text-emerald-700 cursor-pointer">
-                            {isSaving ? <Loader className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
-                          </button>
-                          <button onClick={() => setEditingId(null)} className="text-neutral-400 hover:text-neutral-600 cursor-pointer">
-                            <X className="w-3.5 h-3.5" />
-                          </button>
-                        </div>
-                      </td>
-                    </>
-                  ) : (
-                    <>
-                      <td className="py-2 px-3 font-medium text-neutral-800">{item.name}</td>
-                      <td className="py-2 px-3 font-mono text-neutral-600">{item.code}</td>
-                      <td className="py-2 px-3 text-center">
-                        <span className={`px-1.5 py-0.5 rounded text-[10px] font-semibold ${item.isActive ? 'bg-emerald-50 text-emerald-700' : 'bg-neutral-100 text-neutral-500'}`}>
-                          {item.isActive ? 'Active' : 'Inactive'}
-                        </span>
-                      </td>
-                      <td className="py-2 px-3">
-                        <div className="flex items-center gap-1.5 justify-end">
-                          <button onClick={() => { setEditingId(item.id); setEditForm({ name: item.name, code: item.code, isActive: item.isActive }); }}
-                            className="text-neutral-400 hover:text-neutral-700 cursor-pointer">
-                            <Pencil className="w-3.5 h-3.5" />
-                          </button>
-                          <button onClick={() => handleDelete(item.id, item.name)} className="text-neutral-300 hover:text-red-500 cursor-pointer">
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
-                        </div>
-                      </td>
-                    </>
-                  )}
+                  <td className="py-2 px-3 font-medium text-neutral-800">{item.name}</td>
+                  <td className="py-2 px-3 font-mono text-neutral-600">{item.code}</td>
+                  <td className="py-2 px-3 text-center">
+                    <span className={`px-1.5 py-0.5 rounded text-[10px] font-semibold ${item.isActive ? 'bg-emerald-50 text-emerald-700' : 'bg-neutral-100 text-neutral-500'}`}>
+                      {item.isActive ? 'Active' : 'Inactive'}
+                    </span>
+                  </td>
+                  <td className="py-2 px-3">
+                    <div className="flex items-center gap-1.5 justify-end">
+                      <button onClick={() => openEdit(item)} className="text-neutral-400 hover:text-neutral-700 cursor-pointer">
+                        <Pencil className="w-3.5 h-3.5" />
+                      </button>
+                      <button onClick={() => handleDelete(item.id, item.name)} className="text-neutral-300 hover:text-red-500 cursor-pointer">
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  </td>
                 </tr>
               ))}
             </tbody>
           </table>
+        </div>
+      )}
+
+      {modal && (
+        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-sm">
+            {/* Header */}
+            <div className="flex items-center justify-between px-5 py-4 border-b border-neutral-100">
+              <h3 className="text-sm font-semibold text-neutral-800">
+                {modal.mode === 'add' ? 'Add Department' : 'Edit Department'}
+              </h3>
+              <button onClick={closeModal} className="text-neutral-400 hover:text-neutral-600 cursor-pointer">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Body */}
+            <div className="px-5 py-4 space-y-4">
+              <div className="space-y-1">
+                <label className="text-xs font-medium text-neutral-600">Name <span className="text-red-500">*</span></label>
+                <input
+                  value={form.name}
+                  onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
+                  autoFocus
+                  placeholder="e.g. Human Resources"
+                  className="w-full text-xs border border-neutral-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-1 focus:ring-neutral-900"
+                />
+              </div>
+              <div className="space-y-1">
+                <label className="text-xs font-medium text-neutral-600">Code <span className="text-red-500">*</span></label>
+                <input
+                  value={form.code}
+                  onChange={e => setForm(f => ({ ...f, code: e.target.value.toUpperCase() }))}
+                  maxLength={10}
+                  placeholder="e.g. HR"
+                  className="w-full text-xs border border-neutral-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-1 focus:ring-neutral-900 font-mono uppercase"
+                />
+              </div>
+              {modal.mode === 'edit' && (
+                <div className="flex items-center gap-2">
+                  <input
+                    id="dept-active"
+                    type="checkbox"
+                    checked={form.isActive}
+                    onChange={e => setForm(f => ({ ...f, isActive: e.target.checked }))}
+                    className="rounded border-neutral-300 cursor-pointer"
+                  />
+                  <label htmlFor="dept-active" className="text-xs font-medium text-neutral-600 cursor-pointer">Active</label>
+                </div>
+              )}
+            </div>
+
+            {/* Footer */}
+            <div className="flex items-center justify-end gap-2 px-5 py-4 border-t border-neutral-100">
+              <button
+                onClick={closeModal}
+                className="text-xs font-semibold border border-neutral-200 text-neutral-600 hover:bg-neutral-50 py-1.5 px-4 rounded-lg cursor-pointer transition-colors">
+                Cancel
+              </button>
+              <button
+                onClick={handleSave}
+                disabled={isSaving || !form.name.trim() || !form.code.trim()}
+                className="flex items-center gap-1.5 text-xs font-semibold bg-neutral-900 hover:bg-neutral-800 text-white py-1.5 px-4 rounded-lg cursor-pointer transition-colors disabled:opacity-50">
+                {isSaving && <Loader className="w-3 h-3 animate-spin" />}
+                Save
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>

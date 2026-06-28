@@ -950,6 +950,43 @@ export async function createApp() {
     }
   });
 
+  // Admin sends a password reset email to another user (System Admin only)
+  app.post('/api/users/:id/reset-password', requireAuth, async (req: AuthRequest, res) => {
+    try {
+      if (req.dbUser?.role !== 'System Admin') return res.status(403).json({ error: 'Access Denied.' });
+
+      const targetId = parseInt(req.params.id, 10);
+      const target = await db.select().from(users).where(eq(users.id, targetId)).limit(1);
+      if (!target.length) return res.status(404).json({ error: 'User not found.' });
+
+      const targetUser = target[0];
+      if (targetUser.uid.startsWith('manual:')) {
+        return res.status(400).json({ error: 'This account uses PIN login and cannot use email password reset.' });
+      }
+
+      const supabaseUrl = (process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || '').replace(/\/$/, '');
+      const anonKey = (process.env.VITE_SUPABASE_ANON_KEY || '').trim();
+      if (!supabaseUrl || !anonKey) return res.status(503).json({ error: 'Supabase is not configured.' });
+
+      const supabase = createSupabaseClient(supabaseUrl, anonKey);
+      const { error } = await supabase.auth.resetPasswordForEmail(targetUser.email, {
+        redirectTo: (process.env.APP_URL || process.env.VITE_APP_URL || '').replace(/\/$/, ''),
+      });
+      if (error) throw new Error(error.message);
+
+      await db.insert(auditLogs).values({
+        userId: req.dbUser!.id,
+        action: 'ADMIN_RESET_PASSWORD',
+        details: `Admin sent password reset email to User ID ${targetId} (${targetUser.email})`,
+        createdAt: new Date(),
+      });
+
+      res.json({ ok: true });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
   // Clear mustChangePassword flag after a successful first-login password change
   app.put('/api/me/clear-mustchange', requireAuth, async (req: AuthRequest, res) => {
     try {

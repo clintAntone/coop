@@ -70,6 +70,7 @@ export default function MemberPortal({ currentUser, token, settings }: MemberPor
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
+        if (showLoanForm) { setShowLoanForm(false); setLoanError(null); }
         if (showDepositForm) setShowDepositForm(false);
         if (viewReceiptUrl) setViewReceiptUrl(null);
         if (cancelConfirmId !== null) setCancelConfirmId(null);
@@ -77,7 +78,7 @@ export default function MemberPortal({ currentUser, token, settings }: MemberPor
     };
     document.addEventListener('keydown', handler);
     return () => document.removeEventListener('keydown', handler);
-  }, [showDepositForm, viewReceiptUrl, cancelConfirmId]);
+  }, [showLoanForm, showDepositForm, viewReceiptUrl, cancelConfirmId]);
 
   const fetchMemberPortalData = async () => {
     setIsLoading(true);
@@ -334,7 +335,7 @@ export default function MemberPortal({ currentUser, token, settings }: MemberPor
           {/* Share Capital Equity card */}
           <div className="bg-white border border-neutral-300 rounded-xl p-5 shadow-sm flex flex-col justify-between">
             <div className="flex items-center justify-between">
-              <span className="text-[10px] uppercase font-bold text-neutral-400 tracking-wider">Membership Share Capital</span>
+              <span className="text-[10px] uppercase font-bold text-neutral-400 tracking-wider">Membership Investment</span>
               <Coins className="w-4 h-4 text-neutral-400" />
             </div>
             <div className="my-4">
@@ -380,68 +381,97 @@ export default function MemberPortal({ currentUser, token, settings }: MemberPor
               <h3 className="text-xs font-semibold text-neutral-800">Statement is Empty</h3>
               <p className="text-[11px] text-neutral-400">Once your capital deposits are posted, line statements will populate here.</p>
             </div>
-          ) : (
-            <div className="overflow-x-auto"><table className="w-full text-left text-xs border-collapse">
-              <thead>
-                <tr className="bg-neutral-50 text-neutral-500 text-[10px] uppercase font-semibold border-b border-neutral-150 print:bg-neutral-100">
-                  <th className="py-2.5 px-4 w-28">Date</th>
-                  <th className="py-2.5 px-4">Description Mem</th>
-                  <th className="py-2.5 px-4">Account COA</th>
-                  <th className="py-2.5 px-4 text-right">Debit (Withdrawal)</th>
-                  <th className="py-2.5 px-4 text-right">Credit (Deposit)</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-neutral-150 bg-white">
-                {ledgerLines.map((line) => {
-                  const lineDate = new Date(line.date).toLocaleDateString(undefined, {
-                    month: 'short',
-                    day: 'numeric',
-                    year: 'numeric'
-                  });
-                  const isReversed = line.status === 'reversed';
-                  return (
-                    <tr
-                      key={line.id}
-                      className={`hover:bg-neutral-50/50 transition-colors ${
-                        isReversed ? 'bg-red-50/20 text-neutral-400 line-through' : ''
-                      }`}
-                    >
-                      <td className="py-3 px-4 font-mono text-[10px] text-neutral-500">{lineDate}</td>
-                      <td className="py-3 px-4">
-                        <div className="font-semibold text-neutral-850">{line.description}</div>
-                        {line.transactionRef && (
-                          <div className="text-[9px] text-neutral-400 font-mono">Ref: {line.transactionRef}</div>
-                        )}
-                      </td>
-                      <td className="py-3 px-4">
-                        <span className="font-mono text-[10px] bg-neutral-100 border border-neutral-200 text-neutral-600 px-1.5 py-0.5 rounded">
-                          {line.coaCode}
-                        </span>
-                        <span className="text-[11px] pl-1.5 text-neutral-500">{line.coaName}</span>
-                      </td>
-                      <td className="py-3 px-4 text-right font-mono font-semibold text-neutral-900">
-                        {line.entryType === 'debit' ? `${settings.currencySymbol}(${(line.amount / 100).toFixed(2)})` : '—'}
-                      </td>
-                      <td className="py-3 px-4 text-right font-mono font-semibold text-emerald-700">
-                        {line.entryType === 'credit' ? `${settings.currencySymbol}${(line.amount / 100).toFixed(2)}` : '—'}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-              <tfoot>
-                <tr className="bg-neutral-50 border-t-2 border-neutral-200 font-mono font-bold text-[11px]">
-                  <td colSpan={3} className="py-3 px-4 text-right uppercase tracking-wider text-[10px] text-neutral-500">Totals</td>
-                  <td className="py-3 px-4 text-right text-neutral-900">
-                    {settings.currencySymbol}{(ledgerLines.filter(l => l.entryType === 'debit' && l.status !== 'reversed').reduce((s, l) => s + l.amount, 0) / 100).toFixed(2)}
-                  </td>
-                  <td className="py-3 px-4 text-right text-emerald-700">
-                    {settings.currencySymbol}{(ledgerLines.filter(l => l.entryType === 'credit' && l.status !== 'reversed').reduce((s, l) => s + l.amount, 0) / 100).toFixed(2)}
-                  </td>
-                </tr>
-              </tfoot>
-            </table></div>
-          )}
+          ) : (() => {
+            const TRANSACTION_TYPE_LABELS: Record<string, string> = {
+              share_capital_contribution: 'Membership Investment',
+              manual_adjustment: 'Custom Entry',
+              reversal: 'Undone',
+            };
+            // Sort by date ascending to compute running balance
+            const sortedLines = [...ledgerLines].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+            let runningBalance = 0;
+            const linesWithBalance = sortedLines.map(line => {
+              if (line.status !== 'reversed') {
+                if (line.entryType === 'credit') runningBalance += line.amount;
+                else runningBalance -= line.amount;
+              }
+              return { ...line, runningBalance };
+            });
+            // Re-sort back to original order for display (preserve original ledgerLines order, just attach balance)
+            const balanceById: Record<number, number> = {};
+            linesWithBalance.forEach(l => { balanceById[l.id] = l.runningBalance; });
+            const finalBalance = linesWithBalance[linesWithBalance.length - 1]?.runningBalance ?? 0;
+            return (
+              <div className="overflow-x-auto"><table className="w-full text-left text-xs border-collapse">
+                <thead>
+                  <tr className="bg-neutral-50 text-neutral-500 text-[10px] uppercase font-semibold border-b border-neutral-150 print:bg-neutral-100">
+                    <th className="py-2.5 px-4 w-28">Date</th>
+                    <th className="py-2.5 px-4">Description Mem</th>
+                    <th className="py-2.5 px-4">Account COA</th>
+                    <th className="py-2.5 px-4 text-right">Money Out</th>
+                    <th className="py-2.5 px-4 text-right">Money In</th>
+                    <th className="py-2.5 px-4 text-right">Balance</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-neutral-150 bg-white">
+                  {ledgerLines.map((line) => {
+                    const lineDate = new Date(line.date).toLocaleDateString(undefined, {
+                      month: 'short',
+                      day: 'numeric',
+                      year: 'numeric'
+                    });
+                    const isReversed = line.status === 'reversed';
+                    const displayDescription = TRANSACTION_TYPE_LABELS[line.description] ?? line.description;
+                    return (
+                      <tr
+                        key={line.id}
+                        className={`hover:bg-neutral-50/50 transition-colors ${
+                          isReversed ? 'bg-red-50/20 text-neutral-400 line-through' : ''
+                        }`}
+                      >
+                        <td className="py-3 px-4 font-mono text-[10px] text-neutral-500">{lineDate}</td>
+                        <td className="py-3 px-4">
+                          <div className="font-semibold text-neutral-850">{displayDescription}</div>
+                          {line.transactionRef && (
+                            <div className="text-[9px] text-neutral-400 font-mono">Ref: {line.transactionRef}</div>
+                          )}
+                        </td>
+                        <td className="py-3 px-4">
+                          <span className="font-mono text-[10px] bg-neutral-100 border border-neutral-200 text-neutral-600 px-1.5 py-0.5 rounded">
+                            {line.coaCode}
+                          </span>
+                          <span className="text-[11px] pl-1.5 text-neutral-500">{line.coaName}</span>
+                        </td>
+                        <td className="py-3 px-4 text-right font-mono font-semibold text-neutral-900">
+                          {line.entryType === 'debit' ? `${settings.currencySymbol}(${(line.amount / 100).toFixed(2)})` : '—'}
+                        </td>
+                        <td className="py-3 px-4 text-right font-mono font-semibold text-emerald-700">
+                          {line.entryType === 'credit' ? `${settings.currencySymbol}${(line.amount / 100).toFixed(2)}` : '—'}
+                        </td>
+                        <td className="py-3 px-4 text-right font-mono text-[11px] text-neutral-600">
+                          {settings.currencySymbol}{(balanceById[line.id] / 100).toFixed(2)}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+                <tfoot>
+                  <tr className="bg-neutral-50 border-t-2 border-neutral-200 font-mono font-bold text-[11px]">
+                    <td colSpan={3} className="py-3 px-4 text-right uppercase tracking-wider text-[10px] text-neutral-500">Totals</td>
+                    <td className="py-3 px-4 text-right text-neutral-900">
+                      {settings.currencySymbol}{(ledgerLines.filter(l => l.entryType === 'debit' && l.status !== 'reversed').reduce((s, l) => s + l.amount, 0) / 100).toFixed(2)}
+                    </td>
+                    <td className="py-3 px-4 text-right text-emerald-700">
+                      {settings.currencySymbol}{(ledgerLines.filter(l => l.entryType === 'credit' && l.status !== 'reversed').reduce((s, l) => s + l.amount, 0) / 100).toFixed(2)}
+                    </td>
+                    <td className="py-3 px-4 text-right text-neutral-900 font-bold">
+                      {settings.currencySymbol}{(finalBalance / 100).toFixed(2)}
+                    </td>
+                  </tr>
+                </tfoot>
+              </table></div>
+            );
+          })()}
         </div>
 
         {/* Loan Applications Section */}
@@ -466,70 +496,50 @@ export default function MemberPortal({ currentUser, token, settings }: MemberPor
             </div>
           )}
 
+          {/* Loan progress tracker — only shown when member has at least one application */}
+          {myLoanApps.length > 0 && (() => {
+            const latest = [...myLoanApps].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())[0];
+            const status = latest.status;
+            const outcomeLabel = status === 'approved' ? 'Approved' : status === 'rejected' ? 'Rejected' : status === 'cancelled' ? 'Cancelled' : 'Decision';
+            const activeStep = status === 'pending' ? 1 : (status === 'approved' || status === 'rejected' || status === 'cancelled') ? 2 : 1;
+            const outcomeColor = status === 'approved' ? 'bg-emerald-500 text-white' : status === 'rejected' ? 'bg-red-500 text-white' : status === 'cancelled' ? 'bg-neutral-300 text-neutral-600' : 'bg-neutral-200 text-neutral-500';
+            const outcomeConnector = status === 'approved' ? 'bg-emerald-400' : status === 'rejected' ? 'bg-red-400' : 'bg-neutral-200';
+            const outcomeIcon = status === 'approved' ? ' ✓' : status === 'rejected' ? ' ✗' : '';
+            return (
+              <div className="bg-neutral-50 border border-neutral-200 rounded-xl px-5 py-4">
+                <p className="text-[10px] uppercase font-bold text-neutral-400 tracking-wider mb-3">Latest Application Status</p>
+                <div className="flex items-center gap-0">
+                  {/* Step 0: Applied */}
+                  <div className="flex flex-col items-center gap-1.5 shrink-0">
+                    <div className={`w-7 h-7 rounded-full flex items-center justify-center text-[11px] font-bold ${activeStep >= 0 ? 'bg-neutral-900 text-white' : 'bg-neutral-200 text-neutral-500'}`}>1</div>
+                    <span className="text-[10px] font-medium text-neutral-600 whitespace-nowrap">Applied</span>
+                  </div>
+                  {/* Connector */}
+                  <div className={`flex-1 h-0.5 mx-1 mb-4 ${activeStep >= 1 ? 'bg-neutral-900' : 'bg-neutral-200'}`} />
+                  {/* Step 1: Under Review */}
+                  <div className="flex flex-col items-center gap-1.5 shrink-0">
+                    <div className={`w-7 h-7 rounded-full flex items-center justify-center text-[11px] font-bold ${activeStep >= 1 ? 'bg-neutral-900 text-white' : 'bg-neutral-200 text-neutral-500'}`}>2</div>
+                    <span className="text-[10px] font-medium text-neutral-600 whitespace-nowrap">Under Review</span>
+                  </div>
+                  {/* Connector */}
+                  <div className={`flex-1 h-0.5 mx-1 mb-4 ${activeStep >= 2 ? outcomeConnector : 'bg-neutral-200'}`} />
+                  {/* Step 2: Outcome */}
+                  <div className="flex flex-col items-center gap-1.5 shrink-0">
+                    <div className={`w-7 h-7 rounded-full flex items-center justify-center text-[11px] font-bold ${activeStep >= 2 ? outcomeColor : 'bg-neutral-200 text-neutral-500'}`}>3</div>
+                    <span className="text-[10px] font-medium text-neutral-600 whitespace-nowrap">
+                      {activeStep >= 2 ? outcomeLabel + outcomeIcon : 'Decision'}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            );
+          })()}
+
           {loanProducts2.length === 0 ? (
             <div className="bg-neutral-50 border border-neutral-200 rounded-xl p-6 text-center">
               <FileText className="w-6 h-6 text-neutral-300 mx-auto mb-2" />
               <p className="text-xs font-semibold text-neutral-600">Loan products not yet available</p>
               <p className="text-[11px] text-neutral-400 mt-1">The cooperative has not configured any loan products yet. Please check back later or contact your manager.</p>
-            </div>
-          ) : showLoanForm ? (
-            <div className="bg-white border border-neutral-200 rounded-xl p-5 shadow-sm space-y-4">
-              <h3 className="text-xs font-semibold text-neutral-800">New Loan Application</h3>
-              {loanError && <div className="p-2.5 bg-red-50 border border-red-200 text-red-600 text-xs rounded-lg">{loanError}</div>}
-              <form onSubmit={handleLoanSubmit} className="space-y-3">
-                <div>
-                  <label className="block text-[10px] font-bold uppercase text-neutral-400 mb-1">Loan Product</label>
-                  <select value={loanProductId} onChange={e => setLoanProductId(e.target.value)} required
-                    className="w-full text-xs border border-neutral-200 bg-white rounded-lg p-2.5 focus:outline-none focus:ring-1 focus:ring-neutral-900">
-                    <option value="">— Select a loan type —</option>
-                    {loanProducts2.map(p => (
-                      <option key={p.id} value={p.id}>
-                        {p.name} — {p.interestRateBps / 100}%/mo, max {settings.currencySymbol}{(p.maxAmountCents / 100).toLocaleString()}
-                      </option>
-                    ))}
-                  </select>
-                  {loanProductId && (() => {
-                    const p = loanProducts2.find(p => p.id === parseInt(loanProductId));
-                    if (!p) return null;
-                    return (
-                      <p className="text-[10px] text-neutral-400 mt-1 pl-0.5">
-                        Amount: {settings.currencySymbol}{(p.minAmountCents/100).toLocaleString()} – {settings.currencySymbol}{(p.maxAmountCents/100).toLocaleString()} · Max term: {p.maxTermMonths} months
-                      </p>
-                    );
-                  })()}
-                </div>
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="block text-[10px] font-bold uppercase text-neutral-400 mb-1">Amount ({settings.currencySymbol})</label>
-                    <input type="number" value={loanAmount} onChange={e => setLoanAmount(e.target.value)} required min="1" step="0.01"
-                      className="w-full text-xs border border-neutral-200 bg-white rounded-lg p-2.5 focus:outline-none focus:ring-1 focus:ring-neutral-900 font-mono"
-                      placeholder="e.g. 5000.00" />
-                  </div>
-                  <div>
-                    <label className="block text-[10px] font-bold uppercase text-neutral-400 mb-1">Term (months)</label>
-                    <input type="number" value={loanTerm} onChange={e => setLoanTerm(e.target.value)} required min="1"
-                      className="w-full text-xs border border-neutral-200 bg-white rounded-lg p-2.5 focus:outline-none focus:ring-1 focus:ring-neutral-900 font-mono"
-                      placeholder="e.g. 12" />
-                  </div>
-                </div>
-                <div>
-                  <label className="block text-[10px] font-bold uppercase text-neutral-400 mb-1">Purpose</label>
-                  <textarea value={loanPurpose} onChange={e => setLoanPurpose(e.target.value)} required rows={2}
-                    className="w-full text-xs border border-neutral-200 bg-white rounded-lg p-2.5 focus:outline-none focus:ring-1 focus:ring-neutral-900 placeholder:text-neutral-400 resize-none"
-                    placeholder="Briefly describe what this loan will be used for..." />
-                </div>
-                <div className="flex gap-3 pt-1">
-                  <button type="button" onClick={() => setShowLoanForm(false)}
-                    className="flex-1 border border-neutral-200 text-neutral-700 hover:bg-neutral-50 text-xs font-semibold py-2 rounded-lg cursor-pointer">
-                    Cancel
-                  </button>
-                  <button type="submit" disabled={loanSubmitting}
-                    className="flex-1 bg-neutral-900 hover:bg-neutral-800 disabled:bg-neutral-300 text-white text-xs font-semibold py-2 rounded-lg cursor-pointer flex items-center justify-center gap-1.5">
-                    {loanSubmitting ? <Loader className="w-3.5 h-3.5 animate-spin" /> : <PlusCircle className="w-3.5 h-3.5" />}
-                    {loanSubmitting ? 'Submitting...' : 'Submit Application'}
-                  </button>
-                </div>
-              </form>
             </div>
           ) : myLoanApps.length === 0 ? (
             <div className="bg-neutral-50 border border-neutral-200 rounded-xl p-6 text-center">
@@ -594,6 +604,91 @@ export default function MemberPortal({ currentUser, token, settings }: MemberPor
             <div className="flex items-center gap-2 p-3 bg-emerald-50 border border-emerald-200 rounded-xl text-xs text-emerald-700">
               <CheckCircle className="w-4 h-4 shrink-0" />
               Deposit request submitted! It will be reviewed by an accounting officer.
+            </div>
+          )}
+
+          {/* Loan Application Modal */}
+          {showLoanForm && (
+            <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+              <div className="bg-white rounded-xl shadow-xl w-full max-w-md">
+                {/* Modal Header */}
+                <div className="flex items-center justify-between px-5 py-4 border-b border-neutral-100">
+                  <h2 className="text-sm font-semibold text-neutral-900">New Loan Application</h2>
+                  <button
+                    type="button"
+                    onClick={() => { setShowLoanForm(false); setLoanError(null); }}
+                    className="p-1.5 rounded-full hover:bg-neutral-100 text-neutral-400 hover:text-neutral-700 transition-colors cursor-pointer"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+
+                {/* Modal Body */}
+                <form onSubmit={handleLoanSubmit}>
+                  <div className="px-5 py-4 space-y-4">
+                    {loanError && (
+                      <div className="p-2.5 bg-red-50 border border-red-200 text-red-600 text-xs rounded-lg">{loanError}</div>
+                    )}
+
+                    <div>
+                      <label className="block text-[10px] font-bold uppercase text-neutral-400 mb-1">Loan Product</label>
+                      <select value={loanProductId} onChange={e => setLoanProductId(e.target.value)} required
+                        className="w-full text-xs border border-neutral-200 bg-white rounded-lg p-2.5 focus:outline-none focus:ring-1 focus:ring-neutral-900">
+                        <option value="">— Select a loan type —</option>
+                        {loanProducts2.map(p => (
+                          <option key={p.id} value={p.id}>
+                            {p.name} — {p.interestRateBps / 100}%/mo, max {settings.currencySymbol}{(p.maxAmountCents / 100).toLocaleString()}
+                          </option>
+                        ))}
+                      </select>
+                      {loanProductId && (() => {
+                        const p = loanProducts2.find(p => p.id === parseInt(loanProductId));
+                        if (!p) return null;
+                        return (
+                          <p className="text-[10px] text-neutral-400 mt-1 pl-0.5">
+                            Amount: {settings.currencySymbol}{(p.minAmountCents/100).toLocaleString()} – {settings.currencySymbol}{(p.maxAmountCents/100).toLocaleString()} · Max term: {p.maxTermMonths} months
+                          </p>
+                        );
+                      })()}
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="block text-[10px] font-bold uppercase text-neutral-400 mb-1">Amount ({settings.currencySymbol})</label>
+                        <input type="number" value={loanAmount} onChange={e => setLoanAmount(e.target.value)} required min="1" step="0.01"
+                          className="w-full text-xs border border-neutral-200 bg-white rounded-lg p-2.5 focus:outline-none focus:ring-1 focus:ring-neutral-900 font-mono"
+                          placeholder="e.g. 5000.00" />
+                      </div>
+                      <div>
+                        <label className="block text-[10px] font-bold uppercase text-neutral-400 mb-1">Term (months)</label>
+                        <input type="number" value={loanTerm} onChange={e => setLoanTerm(e.target.value)} required min="1"
+                          className="w-full text-xs border border-neutral-200 bg-white rounded-lg p-2.5 focus:outline-none focus:ring-1 focus:ring-neutral-900 font-mono"
+                          placeholder="e.g. 12" />
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="block text-[10px] font-bold uppercase text-neutral-400 mb-1">Purpose</label>
+                      <textarea value={loanPurpose} onChange={e => setLoanPurpose(e.target.value)} required rows={3}
+                        className="w-full text-xs border border-neutral-200 bg-white rounded-lg p-2.5 focus:outline-none focus:ring-1 focus:ring-neutral-900 placeholder:text-neutral-400 resize-none"
+                        placeholder="Briefly describe what this loan will be used for..." />
+                    </div>
+                  </div>
+
+                  {/* Modal Footer */}
+                  <div className="px-5 py-4 border-t border-neutral-100 flex gap-3">
+                    <button type="button" onClick={() => { setShowLoanForm(false); setLoanError(null); }}
+                      className="flex-1 border border-neutral-200 text-neutral-700 hover:bg-neutral-50 text-xs font-semibold py-2.5 rounded-lg cursor-pointer transition-colors">
+                      Cancel
+                    </button>
+                    <button type="submit" disabled={loanSubmitting}
+                      className="flex-1 bg-neutral-900 hover:bg-neutral-800 disabled:bg-neutral-300 text-white text-xs font-semibold py-2.5 rounded-lg cursor-pointer transition-colors flex items-center justify-center gap-1.5">
+                      {loanSubmitting ? <Loader className="w-3.5 h-3.5 animate-spin" /> : <PlusCircle className="w-3.5 h-3.5" />}
+                      {loanSubmitting ? 'Submitting...' : 'Submit Application'}
+                    </button>
+                  </div>
+                </form>
+              </div>
             </div>
           )}
 

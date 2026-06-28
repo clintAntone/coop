@@ -112,7 +112,7 @@ export default function Sidebar({ currentUser, activeTab, setActiveTab, onLogout
           {currentUser.role !== 'Member' && (
             <button onClick={() => navigate('transactions')}
               className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-xs font-medium tracking-wide transition-all cursor-pointer ${activeTab === 'transactions' ? 'bg-white text-neutral-900 shadow font-semibold' : 'text-neutral-400 hover:text-neutral-100 hover:bg-neutral-850'}`}>
-              <DollarSign className="w-4 h-4 shrink-0" /><span>Posting Ledger</span>
+              <DollarSign className="w-4 h-4 shrink-0" /><span>Transactions</span>
             </button>
           )}
 
@@ -128,14 +128,14 @@ export default function Sidebar({ currentUser, activeTab, setActiveTab, onLogout
           {currentUser.role !== 'Member' && (
             <button onClick={() => navigate('reports')}
               className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-xs font-medium tracking-wide transition-all cursor-pointer ${activeTab === 'reports' ? 'bg-white text-neutral-900 shadow font-semibold' : 'text-neutral-400 hover:text-neutral-100 hover:bg-neutral-850'}`}>
-              <LineChart className="w-4 h-4 shrink-0" /><span>Financial & Audits</span>
+              <LineChart className="w-4 h-4 shrink-0" /><span>Reports & Analytics</span>
             </button>
           )}
 
           {currentUser.role === 'Member' && (
             <button onClick={() => navigate('portal')}
               className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-xs font-medium tracking-wide transition-all cursor-pointer ${activeTab === 'portal' ? 'bg-white text-neutral-900 shadow font-semibold' : 'text-neutral-400 hover:text-neutral-100 hover:bg-neutral-850'}`}>
-              <FileText className="w-4 h-4 shrink-0" /><span>My Self Service</span>
+              <FileText className="w-4 h-4 shrink-0" /><span>My Account</span>
             </button>
           )}
 

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { safeReadJson } from '../../lib/safe-fetch.ts';
-import { Plus, Pencil, Trash2, Check, X, Loader } from 'lucide-react';
+import { Plus, Pencil, Trash2, Loader, X } from 'lucide-react';
 
 interface Props { token: string; }
 
@@ -12,6 +12,10 @@ interface TermItem {
   sortOrder: number;
 }
 
+type Modal =
+  | { mode: 'add' }
+  | { mode: 'edit'; item: TermItem };
+
 function TermsList({ title, description, endpoint, token }: {
   title: string;
   description: string;
@@ -20,10 +24,8 @@ function TermsList({ title, description, endpoint, token }: {
 }) {
   const [items, setItems] = useState<TermItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [editingId, setEditingId] = useState<number | null>(null);
-  const [editForm, setEditForm] = useState<Partial<TermItem>>({});
-  const [showAdd, setShowAdd] = useState(false);
-  const [addForm, setAddForm] = useState({ name: '', description: '', sortOrder: 0 });
+  const [modal, setModal] = useState<Modal | null>(null);
+  const [form, setForm] = useState({ name: '', description: '', sortOrder: 0, isActive: true });
   const [msg, setMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [isSaving, setIsSaving] = useState(false);
 
@@ -39,18 +41,29 @@ function TermsList({ title, description, endpoint, token }: {
 
   const flash = (type: 'success' | 'error', text: string) => { setMsg({ type, text }); };
 
+  const openAdd = () => {
+    setForm({ name: '', description: '', sortOrder: 0, isActive: true });
+    setModal({ mode: 'add' });
+  };
+
+  const openEdit = (item: TermItem) => {
+    setForm({ name: item.name, description: item.description || '', sortOrder: item.sortOrder, isActive: item.isActive });
+    setModal({ mode: 'edit', item });
+  };
+
+  const closeModal = () => setModal(null);
+
   const handleAdd = async () => {
-    if (!addForm.name.trim()) return;
+    if (!form.name.trim()) return;
     setIsSaving(true);
     try {
       const res = await fetch(endpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify(addForm),
+        body: JSON.stringify({ name: form.name, description: form.description, sortOrder: form.sortOrder }),
       });
       if (!res.ok) throw new Error((await safeReadJson(res)).error);
-      setAddForm({ name: '', description: '', sortOrder: 0 });
-      setShowAdd(false);
+      closeModal();
       flash('success', 'Item added.');
       await fetchItems();
     } catch (err: any) { flash('error', err.message); }
@@ -63,10 +76,10 @@ function TermsList({ title, description, endpoint, token }: {
       const res = await fetch(`${endpoint}/${id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify(editForm),
+        body: JSON.stringify(form),
       });
       if (!res.ok) throw new Error((await safeReadJson(res)).error);
-      setEditingId(null);
+      closeModal();
       flash('success', 'Updated.');
       await fetchItems();
     } catch (err: any) { flash('error', err.message); }
@@ -83,9 +96,10 @@ function TermsList({ title, description, endpoint, token }: {
     } catch (err: any) { flash('error', err.message); }
   };
 
-  const startEdit = (item: TermItem) => {
-    setEditingId(item.id);
-    setEditForm({ name: item.name, description: item.description || '', isActive: item.isActive, sortOrder: item.sortOrder });
+  const handleSave = () => {
+    if (!modal) return;
+    if (modal.mode === 'add') handleAdd();
+    else handleUpdate(modal.item.id);
   };
 
   return (
@@ -95,33 +109,16 @@ function TermsList({ title, description, endpoint, token }: {
           <h3 className="text-xs font-bold text-neutral-700">{title}</h3>
           <p className="text-[11px] text-neutral-400 mt-0.5">{description}</p>
         </div>
-        <button onClick={() => setShowAdd(v => !v)}
+        <button onClick={openAdd}
           className="flex items-center gap-1.5 text-xs font-semibold bg-neutral-900 hover:bg-neutral-800 text-white py-1.5 px-3 rounded-lg cursor-pointer transition-colors">
           <Plus className="w-3 h-3" /> Add
         </button>
       </div>
 
-      {msg && <div className={`flex items-center justify-between gap-2 text-xs font-medium px-3 py-2 rounded-lg border ${msg.type === 'success' ? 'text-emerald-700 bg-emerald-50 border-emerald-200' : 'text-red-600 bg-red-50 border-red-200'}`}><span>{msg.text}</span><button type="button" onClick={() => setMsg(null)} className="shrink-0 opacity-60 hover:opacity-100 text-base leading-none cursor-pointer">×</button></div>}
-
-      {showAdd && (
-        <div className="flex items-center gap-2 p-3 bg-neutral-50 border border-neutral-200 rounded-lg">
-          <input value={addForm.name} onChange={e => setAddForm(f => ({ ...f, name: e.target.value }))}
-            onKeyDown={e => e.key === 'Enter' && handleAdd()}
-            placeholder="Name (required)" autoFocus
-            className="flex-grow text-xs border border-neutral-200 rounded-md px-2.5 py-1.5 focus:outline-none focus:ring-1 focus:ring-neutral-400" />
-          <input value={addForm.description} onChange={e => setAddForm(f => ({ ...f, description: e.target.value }))}
-            placeholder="Description (optional)"
-            className="flex-grow text-xs border border-neutral-200 rounded-md px-2.5 py-1.5 focus:outline-none focus:ring-1 focus:ring-neutral-400" />
-          <input type="number" value={addForm.sortOrder} onChange={e => setAddForm(f => ({ ...f, sortOrder: parseInt(e.target.value) || 0 }))}
-            placeholder="Order"
-            className="w-16 text-xs border border-neutral-200 rounded-md px-2.5 py-1.5 focus:outline-none focus:ring-1 focus:ring-neutral-400" />
-          <button onClick={handleAdd} disabled={isSaving || !addForm.name.trim()}
-            className="flex items-center gap-1 text-xs font-semibold bg-neutral-900 text-white py-1.5 px-3 rounded-md cursor-pointer disabled:opacity-50">
-            {isSaving ? <Loader className="w-3 h-3 animate-spin" /> : <Check className="w-3 h-3" />} Save
-          </button>
-          <button onClick={() => setShowAdd(false)} className="text-neutral-400 hover:text-neutral-600 cursor-pointer">
-            <X className="w-4 h-4" />
-          </button>
+      {msg && (
+        <div className={`flex items-center justify-between gap-2 text-xs font-medium px-3 py-2 rounded-lg border ${msg.type === 'success' ? 'text-emerald-700 bg-emerald-50 border-emerald-200' : 'text-red-600 bg-red-50 border-red-200'}`}>
+          <span>{msg.text}</span>
+          <button type="button" onClick={() => setMsg(null)} className="shrink-0 opacity-60 hover:opacity-100 text-base leading-none cursor-pointer">×</button>
         </div>
       )}
 
@@ -144,61 +141,104 @@ function TermsList({ title, description, endpoint, token }: {
             <tbody className="divide-y divide-neutral-100">
               {items.map(item => (
                 <tr key={item.id} className="hover:bg-neutral-50/50">
-                  {editingId === item.id ? (
-                    <>
-                      <td className="py-2 px-3">
-                        <input value={editForm.name || ''} onChange={e => setEditForm(f => ({ ...f, name: e.target.value }))}
-                          className="w-full text-xs border border-neutral-300 rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-neutral-400" />
-                      </td>
-                      <td className="py-2 px-3">
-                        <input value={editForm.description || ''} onChange={e => setEditForm(f => ({ ...f, description: e.target.value }))}
-                          className="w-full text-xs border border-neutral-300 rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-neutral-400" />
-                      </td>
-                      <td className="py-2 px-3 text-center">
-                        <input type="number" value={editForm.sortOrder ?? 0} onChange={e => setEditForm(f => ({ ...f, sortOrder: parseInt(e.target.value) || 0 }))}
-                          className="w-14 text-xs border border-neutral-300 rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-neutral-400 text-center" />
-                      </td>
-                      <td className="py-2 px-3 text-center">
-                        <input type="checkbox" checked={editForm.isActive ?? true} onChange={e => setEditForm(f => ({ ...f, isActive: e.target.checked }))} />
-                      </td>
-                      <td className="py-2 px-3">
-                        <div className="flex items-center gap-1.5 justify-end">
-                          <button onClick={() => handleUpdate(item.id)} disabled={isSaving}
-                            className="text-emerald-600 hover:text-emerald-700 cursor-pointer">
-                            {isSaving ? <Loader className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
-                          </button>
-                          <button onClick={() => setEditingId(null)} className="text-neutral-400 hover:text-neutral-600 cursor-pointer">
-                            <X className="w-3.5 h-3.5" />
-                          </button>
-                        </div>
-                      </td>
-                    </>
-                  ) : (
-                    <>
-                      <td className="py-2 px-3 font-medium text-neutral-800">{item.name}</td>
-                      <td className="py-2 px-3 text-neutral-500">{item.description || '—'}</td>
-                      <td className="py-2 px-3 text-center text-neutral-500">{item.sortOrder}</td>
-                      <td className="py-2 px-3 text-center">
-                        <span className={`px-1.5 py-0.5 rounded text-[10px] font-semibold ${item.isActive ? 'bg-emerald-50 text-emerald-700' : 'bg-neutral-100 text-neutral-500'}`}>
-                          {item.isActive ? 'Active' : 'Inactive'}
-                        </span>
-                      </td>
-                      <td className="py-2 px-3">
-                        <div className="flex items-center gap-1.5 justify-end">
-                          <button onClick={() => startEdit(item)} className="text-neutral-400 hover:text-neutral-700 cursor-pointer">
-                            <Pencil className="w-3.5 h-3.5" />
-                          </button>
-                          <button onClick={() => handleDelete(item.id, item.name)} className="text-neutral-300 hover:text-red-500 cursor-pointer">
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
-                        </div>
-                      </td>
-                    </>
-                  )}
+                  <td className="py-2 px-3 font-medium text-neutral-800">{item.name}</td>
+                  <td className="py-2 px-3 text-neutral-500">{item.description || '—'}</td>
+                  <td className="py-2 px-3 text-center text-neutral-500">{item.sortOrder}</td>
+                  <td className="py-2 px-3 text-center">
+                    <span className={`px-1.5 py-0.5 rounded text-[10px] font-semibold ${item.isActive ? 'bg-emerald-50 text-emerald-700' : 'bg-neutral-100 text-neutral-500'}`}>
+                      {item.isActive ? 'Active' : 'Inactive'}
+                    </span>
+                  </td>
+                  <td className="py-2 px-3">
+                    <div className="flex items-center gap-1.5 justify-end">
+                      <button onClick={() => openEdit(item)} className="text-neutral-400 hover:text-neutral-700 cursor-pointer">
+                        <Pencil className="w-3.5 h-3.5" />
+                      </button>
+                      <button onClick={() => handleDelete(item.id, item.name)} className="text-neutral-300 hover:text-red-500 cursor-pointer">
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  </td>
                 </tr>
               ))}
             </tbody>
           </table>
+        </div>
+      )}
+
+      {modal && (
+        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-sm">
+            {/* Header */}
+            <div className="flex items-center justify-between px-5 py-4 border-b border-neutral-100">
+              <h3 className="text-sm font-semibold text-neutral-800">
+                {modal.mode === 'add' ? `Add ${title.replace(/s$/, '')}` : `Edit ${title.replace(/s$/, '')}`}
+              </h3>
+              <button onClick={closeModal} className="text-neutral-400 hover:text-neutral-600 cursor-pointer">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Body */}
+            <div className="px-5 py-4 space-y-4">
+              <div className="space-y-1">
+                <label className="text-xs font-medium text-neutral-600">Name <span className="text-red-500">*</span></label>
+                <input
+                  value={form.name}
+                  onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
+                  autoFocus
+                  placeholder="e.g. Regular Member"
+                  className="w-full text-xs border border-neutral-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-1 focus:ring-neutral-900"
+                />
+              </div>
+              <div className="space-y-1">
+                <label className="text-xs font-medium text-neutral-600">Description</label>
+                <input
+                  value={form.description}
+                  onChange={e => setForm(f => ({ ...f, description: e.target.value }))}
+                  placeholder="Optional description"
+                  className="w-full text-xs border border-neutral-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-1 focus:ring-neutral-900"
+                />
+              </div>
+              <div className="space-y-1">
+                <label className="text-xs font-medium text-neutral-600">Sort Order</label>
+                <input
+                  type="number"
+                  value={form.sortOrder}
+                  onChange={e => setForm(f => ({ ...f, sortOrder: parseInt(e.target.value) || 0 }))}
+                  className="w-full text-xs border border-neutral-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-1 focus:ring-neutral-900"
+                />
+              </div>
+              {modal.mode === 'edit' && (
+                <div className="flex items-center gap-2">
+                  <input
+                    id={`term-active-${endpoint}`}
+                    type="checkbox"
+                    checked={form.isActive}
+                    onChange={e => setForm(f => ({ ...f, isActive: e.target.checked }))}
+                    className="rounded border-neutral-300 cursor-pointer"
+                  />
+                  <label htmlFor={`term-active-${endpoint}`} className="text-xs font-medium text-neutral-600 cursor-pointer">Active</label>
+                </div>
+              )}
+            </div>
+
+            {/* Footer */}
+            <div className="flex items-center justify-end gap-2 px-5 py-4 border-t border-neutral-100">
+              <button
+                onClick={closeModal}
+                className="text-xs font-semibold border border-neutral-200 text-neutral-600 hover:bg-neutral-50 py-1.5 px-4 rounded-lg cursor-pointer transition-colors">
+                Cancel
+              </button>
+              <button
+                onClick={handleSave}
+                disabled={isSaving || !form.name.trim()}
+                className="flex items-center gap-1.5 text-xs font-semibold bg-neutral-900 hover:bg-neutral-800 text-white py-1.5 px-4 rounded-lg cursor-pointer transition-colors disabled:opacity-50">
+                {isSaving && <Loader className="w-3 h-3 animate-spin" />}
+                Save
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>

@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { safeReadJson } from '../../lib/safe-fetch.ts';
 import { AppSettings } from '../../types.ts';
-import { Plus, Pencil, Trash2, Check, X, Loader } from 'lucide-react';
+import { Plus, Pencil, Trash2, X, Loader } from 'lucide-react';
 
 interface Props { token: string; settings: AppSettings; }
 
@@ -12,13 +12,13 @@ const currencyToCents = (val: string) => Math.round(parseFloat(val || '0') * 100
 
 // ─── Savings Products ────────────────────────────────────────────────────────
 
+const emptySavings = { name: '', description: '', interestRate: '0.00', minBalance: '0.00', isActive: true };
+
 function SavingsProducts({ token, settings }: Props) {
   const [items, setItems] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [editingId, setEditingId] = useState<number | null>(null);
-  const [editForm, setEditForm] = useState<any>({});
-  const [showAdd, setShowAdd] = useState(false);
-  const [addForm, setAddForm] = useState({ name: '', description: '', interestRate: '0.00', minBalance: '0.00', isActive: true });
+  const [modal, setModal] = useState<{ mode: 'add' | 'edit'; item?: any } | null>(null);
+  const [form, setForm] = useState<typeof emptySavings & { isActive: boolean }>(emptySavings);
   const [msg, setMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const sym = settings.currencySymbol;
@@ -35,47 +35,53 @@ function SavingsProducts({ token, settings }: Props) {
 
   const flash = (type: 'success' | 'error', text: string) => { setMsg({ type, text }); };
 
-  const handleAdd = async () => {
-    if (!addForm.name.trim()) return;
-    setIsSaving(true);
-    try {
-      const res = await fetch('/api/terms/savings-products', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({
-          name: addForm.name.trim(),
-          description: addForm.description || null,
-          interestRateBps: displayToBps(addForm.interestRate),
-          minBalanceCents: currencyToCents(addForm.minBalance),
-          isActive: addForm.isActive,
-        }),
-      });
-      if (!res.ok) throw new Error((await safeReadJson(res)).error);
-      setAddForm({ name: '', description: '', interestRate: '0.00', minBalance: '0.00', isActive: true });
-      setShowAdd(false);
-      flash('success', 'Savings product added.');
-      await fetchItems();
-    } catch (err: any) { flash('error', err.message); }
-    finally { setIsSaving(false); }
+  const openAdd = () => {
+    setForm(emptySavings);
+    setModal({ mode: 'add' });
   };
 
-  const handleUpdate = async (id: number) => {
+  const openEdit = (item: any) => {
+    setForm({
+      name: item.name,
+      description: item.description || '',
+      interestRate: bpsToDisplay(item.interestRateBps),
+      minBalance: centsToCurrency(item.minBalanceCents),
+      isActive: item.isActive,
+    });
+    setModal({ mode: 'edit', item });
+  };
+
+  const closeModal = () => { setModal(null); };
+
+  const handleSave = async () => {
+    if (!form.name.trim()) return;
     setIsSaving(true);
     try {
-      const res = await fetch(`/api/terms/savings-products/${id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({
-          name: editForm.name,
-          description: editForm.description || null,
-          interestRateBps: displayToBps(editForm.interestRate),
-          minBalanceCents: currencyToCents(editForm.minBalance),
-          isActive: editForm.isActive,
-        }),
-      });
-      if (!res.ok) throw new Error((await safeReadJson(res)).error);
-      setEditingId(null);
-      flash('success', 'Updated.');
+      const payload = {
+        name: form.name.trim(),
+        description: form.description || null,
+        interestRateBps: displayToBps(form.interestRate),
+        minBalanceCents: currencyToCents(form.minBalance),
+        isActive: form.isActive,
+      };
+      if (modal?.mode === 'add') {
+        const res = await fetch('/api/terms/savings-products', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+          body: JSON.stringify(payload),
+        });
+        if (!res.ok) throw new Error((await safeReadJson(res)).error);
+        flash('success', 'Savings product added.');
+      } else {
+        const res = await fetch(`/api/terms/savings-products/${modal!.item.id}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+          body: JSON.stringify(payload),
+        });
+        if (!res.ok) throw new Error((await safeReadJson(res)).error);
+        flash('success', 'Updated.');
+      }
+      closeModal();
       await fetchItems();
     } catch (err: any) { flash('error', err.message); }
     finally { setIsSaving(false); }
@@ -91,11 +97,6 @@ function SavingsProducts({ token, settings }: Props) {
     } catch (err: any) { flash('error', err.message); }
   };
 
-  const startEdit = (item: any) => {
-    setEditingId(item.id);
-    setEditForm({ name: item.name, description: item.description || '', interestRate: bpsToDisplay(item.interestRateBps), minBalance: centsToCurrency(item.minBalanceCents), isActive: item.isActive });
-  };
-
   return (
     <div className="space-y-3">
       <div className="flex items-center justify-between">
@@ -103,45 +104,13 @@ function SavingsProducts({ token, settings }: Props) {
           <h3 className="text-xs font-bold text-neutral-700">Savings Products</h3>
           <p className="text-[11px] text-neutral-400 mt-0.5">Savings account types offered to members (e.g. Regular Savings, Time Deposit).</p>
         </div>
-        <button onClick={() => setShowAdd(v => !v)}
+        <button onClick={openAdd}
           className="flex items-center gap-1.5 text-xs font-semibold bg-neutral-900 hover:bg-neutral-800 text-white py-1.5 px-3 rounded-lg cursor-pointer transition-colors">
           <Plus className="w-3 h-3" /> Add
         </button>
       </div>
 
       {msg && <div className={`flex items-center justify-between gap-2 text-xs font-medium px-3 py-2 rounded-lg border ${msg.type === 'success' ? 'text-emerald-700 bg-emerald-50 border-emerald-200' : 'text-red-600 bg-red-50 border-red-200'}`}><span>{msg.text}</span><button type="button" onClick={() => setMsg(null)} className="shrink-0 opacity-60 hover:opacity-100 text-base leading-none cursor-pointer">×</button></div>}
-
-      {showAdd && (
-        <div className="p-3 bg-neutral-50 border border-neutral-200 rounded-lg space-y-2">
-          <div className="grid grid-cols-2 gap-2">
-            <input value={addForm.name} onChange={e => setAddForm(f => ({ ...f, name: e.target.value }))} placeholder="Product name *" autoFocus
-              className="text-xs border border-neutral-200 rounded-md px-2.5 py-1.5 focus:outline-none focus:ring-1 focus:ring-neutral-400" />
-            <input value={addForm.description} onChange={e => setAddForm(f => ({ ...f, description: e.target.value }))} placeholder="Description"
-              className="text-xs border border-neutral-200 rounded-md px-2.5 py-1.5 focus:outline-none focus:ring-1 focus:ring-neutral-400" />
-            <div className="relative">
-              <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[11px] text-neutral-400">%</span>
-              <input type="number" value={addForm.interestRate} onChange={e => setAddForm(f => ({ ...f, interestRate: e.target.value }))} placeholder="0.00" min="0" step="0.01"
-                className="w-full text-xs border border-neutral-200 rounded-md pl-6 pr-2.5 py-1.5 focus:outline-none focus:ring-1 focus:ring-neutral-400" />
-              <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[10px] text-neutral-400">p.a.</span>
-            </div>
-            <div className="relative">
-              <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[11px] text-neutral-400">{sym}</span>
-              <input type="number" value={addForm.minBalance} onChange={e => setAddForm(f => ({ ...f, minBalance: e.target.value }))} placeholder="Min balance" min="0" step="0.01"
-                className="w-full text-xs border border-neutral-200 rounded-md pl-6 pr-2.5 py-1.5 focus:outline-none focus:ring-1 focus:ring-neutral-400" />
-            </div>
-          </div>
-          <div className="flex items-center gap-3">
-            <label className="flex items-center gap-1.5 text-xs text-neutral-600 cursor-pointer">
-              <input type="checkbox" checked={addForm.isActive} onChange={e => setAddForm(f => ({ ...f, isActive: e.target.checked }))} /> Active
-            </label>
-            <button onClick={handleAdd} disabled={isSaving || !addForm.name.trim()}
-              className="flex items-center gap-1 text-xs font-semibold bg-neutral-900 text-white py-1.5 px-3 rounded-md cursor-pointer disabled:opacity-50">
-              {isSaving ? <Loader className="w-3 h-3 animate-spin" /> : <Check className="w-3 h-3" />} Save
-            </button>
-            <button onClick={() => setShowAdd(false)} className="text-neutral-400 hover:text-neutral-600 cursor-pointer"><X className="w-4 h-4" /></button>
-          </div>
-        </div>
-      )}
 
       {isLoading ? (
         <div className="py-4 flex justify-center"><Loader className="w-4 h-4 animate-spin text-neutral-400" /></div>
@@ -153,7 +122,7 @@ function SavingsProducts({ token, settings }: Props) {
             <thead className="bg-neutral-50 text-neutral-400 uppercase text-[10px]">
               <tr>
                 <th className="py-2 px-3 text-left font-semibold">Product</th>
-                <th className="py-2 px-3 text-right font-semibold">Rate (p.a.)</th>
+                <th className="py-2 px-3 text-right font-semibold">Annual Rate</th>
                 <th className="py-2 px-3 text-right font-semibold">Min Balance</th>
                 <th className="py-2 px-3 text-center font-semibold w-20">Active</th>
                 <th className="py-2 px-3 w-16"></th>
@@ -162,57 +131,86 @@ function SavingsProducts({ token, settings }: Props) {
             <tbody className="divide-y divide-neutral-100">
               {items.map(item => (
                 <tr key={item.id} className="hover:bg-neutral-50/50">
-                  {editingId === item.id ? (
-                    <>
-                      <td className="py-2 px-3">
-                        <input value={editForm.name} onChange={e => setEditForm((f: any) => ({ ...f, name: e.target.value }))}
-                          className="w-full text-xs border border-neutral-300 rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-neutral-400" />
-                      </td>
-                      <td className="py-2 px-3">
-                        <input type="number" value={editForm.interestRate} onChange={e => setEditForm((f: any) => ({ ...f, interestRate: e.target.value }))} min="0" step="0.01"
-                          className="w-full text-xs border border-neutral-300 rounded px-2 py-1 text-right focus:outline-none focus:ring-1 focus:ring-neutral-400" />
-                      </td>
-                      <td className="py-2 px-3">
-                        <input type="number" value={editForm.minBalance} onChange={e => setEditForm((f: any) => ({ ...f, minBalance: e.target.value }))} min="0" step="0.01"
-                          className="w-full text-xs border border-neutral-300 rounded px-2 py-1 text-right focus:outline-none focus:ring-1 focus:ring-neutral-400" />
-                      </td>
-                      <td className="py-2 px-3 text-center">
-                        <input type="checkbox" checked={editForm.isActive} onChange={e => setEditForm((f: any) => ({ ...f, isActive: e.target.checked }))} />
-                      </td>
-                      <td className="py-2 px-3">
-                        <div className="flex items-center gap-1.5 justify-end">
-                          <button onClick={() => handleUpdate(item.id)} disabled={isSaving} className="text-emerald-600 hover:text-emerald-700 cursor-pointer">
-                            {isSaving ? <Loader className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
-                          </button>
-                          <button onClick={() => setEditingId(null)} className="text-neutral-400 hover:text-neutral-600 cursor-pointer"><X className="w-3.5 h-3.5" /></button>
-                        </div>
-                      </td>
-                    </>
-                  ) : (
-                    <>
-                      <td className="py-2 px-3">
-                        <div className="font-medium text-neutral-800">{item.name}</div>
-                        {item.description && <div className="text-[10px] text-neutral-400">{item.description}</div>}
-                      </td>
-                      <td className="py-2 px-3 text-right font-mono">{bpsToDisplay(item.interestRateBps)}%</td>
-                      <td className="py-2 px-3 text-right font-mono">{sym}{centsToCurrency(item.minBalanceCents)}</td>
-                      <td className="py-2 px-3 text-center">
-                        <span className={`px-1.5 py-0.5 rounded text-[10px] font-semibold ${item.isActive ? 'bg-emerald-50 text-emerald-700' : 'bg-neutral-100 text-neutral-500'}`}>
-                          {item.isActive ? 'Active' : 'Inactive'}
-                        </span>
-                      </td>
-                      <td className="py-2 px-3">
-                        <div className="flex items-center gap-1.5 justify-end">
-                          <button onClick={() => startEdit(item)} className="text-neutral-400 hover:text-neutral-700 cursor-pointer"><Pencil className="w-3.5 h-3.5" /></button>
-                          <button onClick={() => handleDelete(item.id, item.name)} className="text-neutral-300 hover:text-red-500 cursor-pointer"><Trash2 className="w-3.5 h-3.5" /></button>
-                        </div>
-                      </td>
-                    </>
-                  )}
+                  <td className="py-2 px-3">
+                    <div className="font-medium text-neutral-800">{item.name}</div>
+                    {item.description && <div className="text-[10px] text-neutral-400">{item.description}</div>}
+                  </td>
+                  <td className="py-2 px-3 text-right font-mono">{bpsToDisplay(item.interestRateBps)}%</td>
+                  <td className="py-2 px-3 text-right font-mono">{sym}{centsToCurrency(item.minBalanceCents)}</td>
+                  <td className="py-2 px-3 text-center">
+                    <span className={`px-1.5 py-0.5 rounded text-[10px] font-semibold ${item.isActive ? 'bg-emerald-50 text-emerald-700' : 'bg-neutral-100 text-neutral-500'}`}>
+                      {item.isActive ? 'Active' : 'Inactive'}
+                    </span>
+                  </td>
+                  <td className="py-2 px-3">
+                    <div className="flex items-center gap-1.5 justify-end">
+                      <button onClick={() => openEdit(item)} className="text-neutral-400 hover:text-neutral-700 cursor-pointer"><Pencil className="w-3.5 h-3.5" /></button>
+                      <button onClick={() => handleDelete(item.id, item.name)} className="text-neutral-300 hover:text-red-500 cursor-pointer"><Trash2 className="w-3.5 h-3.5" /></button>
+                    </div>
+                  </td>
                 </tr>
               ))}
             </tbody>
           </table>
+        </div>
+      )}
+
+      {modal && (
+        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-md">
+            <div className="flex items-center justify-between px-5 py-4 border-b border-neutral-100">
+              <h2 className="text-sm font-bold text-neutral-800">
+                {modal.mode === 'add' ? 'Add Savings Product' : 'Edit Savings Product'}
+              </h2>
+              <button onClick={closeModal} className="text-neutral-400 hover:text-neutral-600 cursor-pointer"><X className="w-4 h-4" /></button>
+            </div>
+            <div className="px-5 py-4 space-y-3">
+              <div className="grid grid-cols-2 gap-3">
+                <div className="col-span-2">
+                  <label className="block text-[10px] font-bold uppercase text-neutral-400 mb-1">Product Name *</label>
+                  <input value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} autoFocus
+                    className="w-full text-xs border border-neutral-200 rounded-md px-2.5 py-1.5 focus:outline-none focus:ring-1 focus:ring-neutral-400" />
+                </div>
+                <div className="col-span-2">
+                  <label className="block text-[10px] font-bold uppercase text-neutral-400 mb-1">Description</label>
+                  <input value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))}
+                    className="w-full text-xs border border-neutral-200 rounded-md px-2.5 py-1.5 focus:outline-none focus:ring-1 focus:ring-neutral-400" />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-bold uppercase text-neutral-400 mb-1">Annual Interest Rate (%)</label>
+                  <div className="relative">
+                    <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[11px] text-neutral-400">%</span>
+                    <input type="number" value={form.interestRate} onChange={e => setForm(f => ({ ...f, interestRate: e.target.value }))} min="0" step="0.01"
+                      className="w-full text-xs border border-neutral-200 rounded-md pl-6 pr-10 py-1.5 focus:outline-none focus:ring-1 focus:ring-neutral-400" />
+                    <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[10px] text-neutral-400">p.a.</span>
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-[10px] font-bold uppercase text-neutral-400 mb-1">Minimum Balance (optional)</label>
+                  <div className="relative">
+                    <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[11px] text-neutral-400">{sym}</span>
+                    <input type="number" value={form.minBalance} onChange={e => setForm(f => ({ ...f, minBalance: e.target.value }))} min="0" step="0.01"
+                      className="w-full text-xs border border-neutral-200 rounded-md pl-6 pr-2.5 py-1.5 focus:outline-none focus:ring-1 focus:ring-neutral-400" />
+                  </div>
+                </div>
+              </div>
+              <label className="flex items-center gap-2 text-xs text-neutral-600 cursor-pointer">
+                <input type="checkbox" checked={form.isActive} onChange={e => setForm(f => ({ ...f, isActive: e.target.checked }))} />
+                Active
+              </label>
+            </div>
+            <div className="flex items-center justify-end gap-2 px-5 py-4 border-t border-neutral-100">
+              <button onClick={closeModal}
+                className="text-xs font-semibold border border-neutral-200 text-neutral-700 py-1.5 px-4 rounded-lg cursor-pointer hover:bg-neutral-50 transition-colors">
+                Cancel
+              </button>
+              <button onClick={handleSave} disabled={isSaving || !form.name.trim()}
+                className="flex items-center gap-1.5 text-xs font-semibold bg-neutral-900 text-white py-1.5 px-4 rounded-lg cursor-pointer disabled:opacity-50 hover:bg-neutral-800 transition-colors">
+                {isSaving && <Loader className="w-3 h-3 animate-spin" />}
+                Save
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>
@@ -221,14 +219,13 @@ function SavingsProducts({ token, settings }: Props) {
 
 // ─── Loan Products ───────────────────────────────────────────────────────────
 
+const emptyLoan = { name: '', description: '', interestRate: '1.00', maxTermMonths: '12', minAmount: '0.00', maxAmount: '0.00', isActive: true };
+
 function LoanProducts({ token, settings }: Props) {
   const [items, setItems] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [editingId, setEditingId] = useState<number | null>(null);
-  const [editForm, setEditForm] = useState<any>({});
-  const [showAdd, setShowAdd] = useState(false);
-  const emptyAdd = { name: '', description: '', interestRate: '1.00', maxTermMonths: '12', minAmount: '0.00', maxAmount: '0.00', isActive: true };
-  const [addForm, setAddForm] = useState(emptyAdd);
+  const [modal, setModal] = useState<{ mode: 'add' | 'edit'; item?: any } | null>(null);
+  const [form, setForm] = useState<typeof emptyLoan & { isActive: boolean }>(emptyLoan);
   const [msg, setMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const sym = settings.currencySymbol;
@@ -245,7 +242,7 @@ function LoanProducts({ token, settings }: Props) {
 
   const flash = (type: 'success' | 'error', text: string) => { setMsg({ type, text }); };
 
-  const toPayload = (f: any) => ({
+  const toPayload = (f: typeof emptyLoan & { isActive: boolean }) => ({
     name: f.name.trim(),
     description: f.description || null,
     interestRateBps: displayToBps(f.interestRate),
@@ -255,35 +252,48 @@ function LoanProducts({ token, settings }: Props) {
     isActive: f.isActive,
   });
 
-  const handleAdd = async () => {
-    if (!addForm.name.trim()) return;
-    setIsSaving(true);
-    try {
-      const res = await fetch('/api/terms/loan-products', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify(toPayload(addForm)),
-      });
-      if (!res.ok) throw new Error((await safeReadJson(res)).error);
-      setAddForm(emptyAdd);
-      setShowAdd(false);
-      flash('success', 'Loan product added.');
-      await fetchItems();
-    } catch (err: any) { flash('error', err.message); }
-    finally { setIsSaving(false); }
+  const openAdd = () => {
+    setForm(emptyLoan);
+    setModal({ mode: 'add' });
   };
 
-  const handleUpdate = async (id: number) => {
+  const openEdit = (item: any) => {
+    setForm({
+      name: item.name,
+      description: item.description || '',
+      interestRate: bpsToDisplay(item.interestRateBps),
+      maxTermMonths: String(item.maxTermMonths),
+      minAmount: centsToCurrency(item.minAmountCents),
+      maxAmount: centsToCurrency(item.maxAmountCents),
+      isActive: item.isActive,
+    });
+    setModal({ mode: 'edit', item });
+  };
+
+  const closeModal = () => { setModal(null); };
+
+  const handleSave = async () => {
+    if (!form.name.trim()) return;
     setIsSaving(true);
     try {
-      const res = await fetch(`/api/terms/loan-products/${id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify(toPayload(editForm)),
-      });
-      if (!res.ok) throw new Error((await safeReadJson(res)).error);
-      setEditingId(null);
-      flash('success', 'Updated.');
+      if (modal?.mode === 'add') {
+        const res = await fetch('/api/terms/loan-products', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+          body: JSON.stringify(toPayload(form)),
+        });
+        if (!res.ok) throw new Error((await safeReadJson(res)).error);
+        flash('success', 'Loan product added.');
+      } else {
+        const res = await fetch(`/api/terms/loan-products/${modal!.item.id}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+          body: JSON.stringify(toPayload(form)),
+        });
+        if (!res.ok) throw new Error((await safeReadJson(res)).error);
+        flash('success', 'Updated.');
+      }
+      closeModal();
       await fetchItems();
     } catch (err: any) { flash('error', err.message); }
     finally { setIsSaving(false); }
@@ -299,49 +309,54 @@ function LoanProducts({ token, settings }: Props) {
     } catch (err: any) { flash('error', err.message); }
   };
 
-  const startEdit = (item: any) => {
-    setEditingId(item.id);
-    setEditForm({
-      name: item.name, description: item.description || '',
-      interestRate: bpsToDisplay(item.interestRateBps),
-      maxTermMonths: String(item.maxTermMonths),
-      minAmount: centsToCurrency(item.minAmountCents),
-      maxAmount: centsToCurrency(item.maxAmountCents),
-      isActive: item.isActive,
-    });
-  };
-
-  const AddRow = ({ form, setForm }: { form: typeof emptyAdd; setForm: any }) => (
-    <div className="p-3 bg-neutral-50 border border-neutral-200 rounded-lg space-y-2">
-      <div className="grid grid-cols-2 gap-2">
-        <input value={form.name} onChange={e => setForm((f: any) => ({ ...f, name: e.target.value }))} placeholder="Product name *"
-          className="text-xs border border-neutral-200 rounded-md px-2.5 py-1.5 focus:outline-none focus:ring-1 focus:ring-neutral-400" />
-        <input value={form.description} onChange={e => setForm((f: any) => ({ ...f, description: e.target.value }))} placeholder="Description"
-          className="text-xs border border-neutral-200 rounded-md px-2.5 py-1.5 focus:outline-none focus:ring-1 focus:ring-neutral-400" />
-        <div className="relative">
-          <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[11px] text-neutral-400">%</span>
-          <input type="number" value={form.interestRate} onChange={e => setForm((f: any) => ({ ...f, interestRate: e.target.value }))} min="0" step="0.01"
-            className="w-full text-xs border border-neutral-200 rounded-md pl-6 pr-2.5 py-1.5 focus:outline-none focus:ring-1 focus:ring-neutral-400" />
-          <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[10px] text-neutral-400">/mo</span>
+  const AddRow = ({ f, setF }: { f: typeof emptyLoan & { isActive: boolean }; setF: React.Dispatch<React.SetStateAction<typeof emptyLoan & { isActive: boolean }>> }) => (
+    <div className="space-y-3">
+      <div className="grid grid-cols-2 gap-3">
+        <div className="col-span-2">
+          <label className="block text-[10px] font-bold uppercase text-neutral-400 mb-1">Product Name *</label>
+          <input value={f.name} onChange={e => setF(prev => ({ ...prev, name: e.target.value }))} autoFocus
+            className="w-full text-xs border border-neutral-200 rounded-md px-2.5 py-1.5 focus:outline-none focus:ring-1 focus:ring-neutral-400" />
         </div>
-        <input type="number" value={form.maxTermMonths} onChange={e => setForm((f: any) => ({ ...f, maxTermMonths: e.target.value }))} min="1" step="1" placeholder="Max months"
-          className="text-xs border border-neutral-200 rounded-md px-2.5 py-1.5 focus:outline-none focus:ring-1 focus:ring-neutral-400" />
-        <div className="relative">
-          <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[11px] text-neutral-400">{sym}</span>
-          <input type="number" value={form.minAmount} onChange={e => setForm((f: any) => ({ ...f, minAmount: e.target.value }))} min="0" step="0.01"
-            className="w-full text-xs border border-neutral-200 rounded-md pl-6 pr-2.5 py-1.5 focus:outline-none focus:ring-1 focus:ring-neutral-400" placeholder="Min amount" />
+        <div className="col-span-2">
+          <label className="block text-[10px] font-bold uppercase text-neutral-400 mb-1">Description</label>
+          <input value={f.description} onChange={e => setF(prev => ({ ...prev, description: e.target.value }))}
+            className="w-full text-xs border border-neutral-200 rounded-md px-2.5 py-1.5 focus:outline-none focus:ring-1 focus:ring-neutral-400" />
         </div>
-        <div className="relative">
-          <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[11px] text-neutral-400">{sym}</span>
-          <input type="number" value={form.maxAmount} onChange={e => setForm((f: any) => ({ ...f, maxAmount: e.target.value }))} min="0" step="0.01"
-            className="w-full text-xs border border-neutral-200 rounded-md pl-6 pr-2.5 py-1.5 focus:outline-none focus:ring-1 focus:ring-neutral-400" placeholder="Max amount" />
+        <div>
+          <label className="block text-[10px] font-bold uppercase text-neutral-400 mb-1">Monthly Interest Rate (%)</label>
+          <div className="relative">
+            <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[11px] text-neutral-400">%</span>
+            <input type="number" value={f.interestRate} onChange={e => setF(prev => ({ ...prev, interestRate: e.target.value }))} min="0" step="0.01"
+              className="w-full text-xs border border-neutral-200 rounded-md pl-6 pr-10 py-1.5 focus:outline-none focus:ring-1 focus:ring-neutral-400" />
+            <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[10px] text-neutral-400">/mo</span>
+          </div>
+        </div>
+        <div>
+          <label className="block text-[10px] font-bold uppercase text-neutral-400 mb-1">Max Term (months)</label>
+          <input type="number" value={f.maxTermMonths} onChange={e => setF(prev => ({ ...prev, maxTermMonths: e.target.value }))} min="1" step="1" placeholder="e.g. 24"
+            className="w-full text-xs border border-neutral-200 rounded-md px-2.5 py-1.5 focus:outline-none focus:ring-1 focus:ring-neutral-400" />
+        </div>
+        <div>
+          <label className="block text-[10px] font-bold uppercase text-neutral-400 mb-1">Min Amount</label>
+          <div className="relative">
+            <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[11px] text-neutral-400">{sym}</span>
+            <input type="number" value={f.minAmount} onChange={e => setF(prev => ({ ...prev, minAmount: e.target.value }))} min="0" step="0.01" placeholder="Minimum loan amount"
+              className="w-full text-xs border border-neutral-200 rounded-md pl-6 pr-2.5 py-1.5 focus:outline-none focus:ring-1 focus:ring-neutral-400" />
+          </div>
+        </div>
+        <div>
+          <label className="block text-[10px] font-bold uppercase text-neutral-400 mb-1">Max Amount</label>
+          <div className="relative">
+            <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[11px] text-neutral-400">{sym}</span>
+            <input type="number" value={f.maxAmount} onChange={e => setF(prev => ({ ...prev, maxAmount: e.target.value }))} min="0" step="0.01" placeholder="Maximum loan amount"
+              className="w-full text-xs border border-neutral-200 rounded-md pl-6 pr-2.5 py-1.5 focus:outline-none focus:ring-1 focus:ring-neutral-400" />
+          </div>
         </div>
       </div>
-      <div className="flex items-center gap-3">
-        <label className="flex items-center gap-1.5 text-xs text-neutral-600 cursor-pointer">
-          <input type="checkbox" checked={form.isActive} onChange={e => setForm((f: any) => ({ ...f, isActive: e.target.checked }))} /> Active
-        </label>
-      </div>
+      <label className="flex items-center gap-2 text-xs text-neutral-600 cursor-pointer">
+        <input type="checkbox" checked={f.isActive} onChange={e => setF(prev => ({ ...prev, isActive: e.target.checked }))} />
+        Active
+      </label>
     </div>
   );
 
@@ -352,26 +367,13 @@ function LoanProducts({ token, settings }: Props) {
           <h3 className="text-xs font-bold text-neutral-700">Loan Products</h3>
           <p className="text-[11px] text-neutral-400 mt-0.5">Types of loans available to members (e.g. Emergency Loan, Multi-Purpose Loan).</p>
         </div>
-        <button onClick={() => setShowAdd(v => !v)}
+        <button onClick={openAdd}
           className="flex items-center gap-1.5 text-xs font-semibold bg-neutral-900 hover:bg-neutral-800 text-white py-1.5 px-3 rounded-lg cursor-pointer transition-colors">
           <Plus className="w-3 h-3" /> Add
         </button>
       </div>
 
       {msg && <div className={`flex items-center justify-between gap-2 text-xs font-medium px-3 py-2 rounded-lg border ${msg.type === 'success' ? 'text-emerald-700 bg-emerald-50 border-emerald-200' : 'text-red-600 bg-red-50 border-red-200'}`}><span>{msg.text}</span><button type="button" onClick={() => setMsg(null)} className="shrink-0 opacity-60 hover:opacity-100 text-base leading-none cursor-pointer">×</button></div>}
-
-      {showAdd && (
-        <div className="p-3 bg-neutral-50 border border-neutral-200 rounded-lg space-y-2">
-          <AddRow form={addForm} setForm={setAddForm} />
-          <div className="flex items-center gap-2 pt-1">
-            <button onClick={handleAdd} disabled={isSaving || !addForm.name.trim()}
-              className="flex items-center gap-1 text-xs font-semibold bg-neutral-900 text-white py-1.5 px-3 rounded-md cursor-pointer disabled:opacity-50">
-              {isSaving ? <Loader className="w-3 h-3 animate-spin" /> : <Check className="w-3 h-3" />} Save
-            </button>
-            <button onClick={() => setShowAdd(false)} className="text-neutral-400 hover:text-neutral-600 cursor-pointer"><X className="w-4 h-4" /></button>
-          </div>
-        </div>
-      )}
 
       {isLoading ? (
         <div className="py-4 flex justify-center"><Loader className="w-4 h-4 animate-spin text-neutral-400" /></div>
@@ -383,9 +385,9 @@ function LoanProducts({ token, settings }: Props) {
             <thead className="bg-neutral-50 text-neutral-400 uppercase text-[10px]">
               <tr>
                 <th className="py-2 px-3 text-left font-semibold">Product</th>
-                <th className="py-2 px-3 text-right font-semibold">Rate/mo</th>
-                <th className="py-2 px-3 text-right font-semibold">Max Term</th>
-                <th className="py-2 px-3 text-right font-semibold">Min–Max Amount</th>
+                <th className="py-2 px-3 text-right font-semibold">Monthly Rate</th>
+                <th className="py-2 px-3 text-right font-semibold">Maximum Duration</th>
+                <th className="py-2 px-3 text-right font-semibold">Loan Amount Range</th>
                 <th className="py-2 px-3 text-center font-semibold w-20">Active</th>
                 <th className="py-2 px-3 w-16"></th>
               </tr>
@@ -393,48 +395,57 @@ function LoanProducts({ token, settings }: Props) {
             <tbody className="divide-y divide-neutral-100">
               {items.map(item => (
                 <tr key={item.id} className="hover:bg-neutral-50/50">
-                  {editingId === item.id ? (
-                    <>
-                      <td colSpan={5} className="py-2 px-3">
-                        <AddRow form={editForm} setForm={setEditForm} />
-                      </td>
-                      <td className="py-2 px-3 align-top pt-3">
-                        <div className="flex items-center gap-1.5 justify-end">
-                          <button onClick={() => handleUpdate(item.id)} disabled={isSaving} className="text-emerald-600 cursor-pointer">
-                            {isSaving ? <Loader className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
-                          </button>
-                          <button onClick={() => setEditingId(null)} className="text-neutral-400 cursor-pointer"><X className="w-3.5 h-3.5" /></button>
-                        </div>
-                      </td>
-                    </>
-                  ) : (
-                    <>
-                      <td className="py-2 px-3">
-                        <div className="font-medium text-neutral-800">{item.name}</div>
-                        {item.description && <div className="text-[10px] text-neutral-400">{item.description}</div>}
-                      </td>
-                      <td className="py-2 px-3 text-right font-mono">{bpsToDisplay(item.interestRateBps)}%</td>
-                      <td className="py-2 px-3 text-right font-mono">{item.maxTermMonths} mos</td>
-                      <td className="py-2 px-3 text-right font-mono text-neutral-600">
-                        {sym}{centsToCurrency(item.minAmountCents)} – {sym}{centsToCurrency(item.maxAmountCents)}
-                      </td>
-                      <td className="py-2 px-3 text-center">
-                        <span className={`px-1.5 py-0.5 rounded text-[10px] font-semibold ${item.isActive ? 'bg-emerald-50 text-emerald-700' : 'bg-neutral-100 text-neutral-500'}`}>
-                          {item.isActive ? 'Active' : 'Inactive'}
-                        </span>
-                      </td>
-                      <td className="py-2 px-3">
-                        <div className="flex items-center gap-1.5 justify-end">
-                          <button onClick={() => startEdit(item)} className="text-neutral-400 hover:text-neutral-700 cursor-pointer"><Pencil className="w-3.5 h-3.5" /></button>
-                          <button onClick={() => handleDelete(item.id, item.name)} className="text-neutral-300 hover:text-red-500 cursor-pointer"><Trash2 className="w-3.5 h-3.5" /></button>
-                        </div>
-                      </td>
-                    </>
-                  )}
+                  <td className="py-2 px-3">
+                    <div className="font-medium text-neutral-800">{item.name}</div>
+                    {item.description && <div className="text-[10px] text-neutral-400">{item.description}</div>}
+                  </td>
+                  <td className="py-2 px-3 text-right font-mono">{bpsToDisplay(item.interestRateBps)}%</td>
+                  <td className="py-2 px-3 text-right font-mono">{item.maxTermMonths} mos</td>
+                  <td className="py-2 px-3 text-right font-mono text-neutral-600">
+                    {sym}{centsToCurrency(item.minAmountCents)} – {sym}{centsToCurrency(item.maxAmountCents)}
+                  </td>
+                  <td className="py-2 px-3 text-center">
+                    <span className={`px-1.5 py-0.5 rounded text-[10px] font-semibold ${item.isActive ? 'bg-emerald-50 text-emerald-700' : 'bg-neutral-100 text-neutral-500'}`}>
+                      {item.isActive ? 'Active' : 'Inactive'}
+                    </span>
+                  </td>
+                  <td className="py-2 px-3">
+                    <div className="flex items-center gap-1.5 justify-end">
+                      <button onClick={() => openEdit(item)} className="text-neutral-400 hover:text-neutral-700 cursor-pointer"><Pencil className="w-3.5 h-3.5" /></button>
+                      <button onClick={() => handleDelete(item.id, item.name)} className="text-neutral-300 hover:text-red-500 cursor-pointer"><Trash2 className="w-3.5 h-3.5" /></button>
+                    </div>
+                  </td>
                 </tr>
               ))}
             </tbody>
           </table>
+        </div>
+      )}
+
+      {modal && (
+        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-md">
+            <div className="flex items-center justify-between px-5 py-4 border-b border-neutral-100">
+              <h2 className="text-sm font-bold text-neutral-800">
+                {modal.mode === 'add' ? 'Add Loan Product' : 'Edit Loan Product'}
+              </h2>
+              <button onClick={closeModal} className="text-neutral-400 hover:text-neutral-600 cursor-pointer"><X className="w-4 h-4" /></button>
+            </div>
+            <div className="px-5 py-4">
+              <AddRow f={form} setF={setForm} />
+            </div>
+            <div className="flex items-center justify-end gap-2 px-5 py-4 border-t border-neutral-100">
+              <button onClick={closeModal}
+                className="text-xs font-semibold border border-neutral-200 text-neutral-700 py-1.5 px-4 rounded-lg cursor-pointer hover:bg-neutral-50 transition-colors">
+                Cancel
+              </button>
+              <button onClick={handleSave} disabled={isSaving || !form.name.trim()}
+                className="flex items-center gap-1.5 text-xs font-semibold bg-neutral-900 text-white py-1.5 px-4 rounded-lg cursor-pointer disabled:opacity-50 hover:bg-neutral-800 transition-colors">
+                {isSaving && <Loader className="w-3 h-3 animate-spin" />}
+                Save
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>

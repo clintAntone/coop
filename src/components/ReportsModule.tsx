@@ -158,7 +158,7 @@ export default function ReportsModule({ currentUser, token, settings }: ReportsM
             }`}
           >
             <ShieldCheck className="w-3.5 h-3.5 shrink-0" />
-            <span>Trial Balance</span>
+            <span>Balance Check</span>
           </button>
           <button
             onClick={() => setActiveSubTab('members')}
@@ -169,7 +169,7 @@ export default function ReportsModule({ currentUser, token, settings }: ReportsM
             }`}
           >
             <FileSpreadsheet className="w-3.5 h-3.5 shrink-0" />
-            <span>Members Capital Map</span>
+            <span>Member Savings Overview</span>
           </button>
           {['System Admin', 'Manager', 'Auditor'].includes(currentUser.role) && (
             <button
@@ -181,7 +181,7 @@ export default function ReportsModule({ currentUser, token, settings }: ReportsM
               }`}
             >
               <History className="w-3.5 h-3.5 shrink-0" />
-              <span>Security Traces</span>
+              <span>Activity Log</span>
             </button>
           )}
         </div>
@@ -205,6 +205,10 @@ export default function ReportsModule({ currentUser, token, settings }: ReportsM
           {/* Active TAB 1: TRIAL BALANCE */}
           {activeSubTab === 'trial' && (
             <div className="space-y-6">
+              <div>
+                <h2 className="text-sm font-semibold text-neutral-800 font-sans">Balance Check</h2>
+                <p className="text-[11px] text-neutral-400 mt-1 leading-relaxed">This shows a summary of all financial activity. Green means everything is correct.</p>
+              </div>
               {/* Double-Entry balanced alert */}
               <div
                 className={`flex items-center justify-between p-4 rounded-xl border ${
@@ -219,13 +223,8 @@ export default function ReportsModule({ currentUser, token, settings }: ReportsM
                   </div>
                   <div>
                     <h2 className="text-xs font-semibold font-sans">
-                      {accountsAreBalanced ? 'Balanced Ledger Confirmed' : 'Imbalanced Ledger Warning'}
+                      {accountsAreBalanced ? '✓ Everything balances — your financial records are in order.' : `⚠ Something is off — the records don't balance by ${settings.currencySymbol}${(Math.abs(totalDebitSum - totalCreditSum) / 100).toFixed(2)}. Contact your accountant.`}
                     </h2>
-                    <p className="text-[10px] text-neutral-500 mt-0.5 leading-relaxed font-sans">
-                      {accountsAreBalanced
-                        ? `Auditing trace checks out perfectly! Total Net Debits match Total Net Credits exactly across all ledger codes.`
-                        : `A double-entry accounting imbalance of ${settings.currencySymbol}${(Math.abs(totalDebitSum - totalCreditSum) / 100).toFixed(2)} was identified.`}
-                    </p>
                   </div>
                 </div>
 
@@ -365,7 +364,7 @@ export default function ReportsModule({ currentUser, token, settings }: ReportsM
             </div>
           )}
 
-          {/* Active TAB 2: MEMBERS CAPITAL MAP */}
+          {/* Active TAB 2: MEMBER SAVINGS OVERVIEW */}
           {activeSubTab === 'members' && (
             <div className="space-y-8">
               {/* Aggregate Capital charts */}
@@ -373,7 +372,7 @@ export default function ReportsModule({ currentUser, token, settings }: ReportsM
                 {/* Aggregate Numeric Summary */}
                 <div className="bg-white border border-neutral-200/80 rounded-xl p-5 shadow-sm space-y-4">
                   <h3 className="text-[10px] font-bold text-neutral-400 uppercase tracking-widest flex items-center gap-1">
-                    <Sparkles className="w-3.5 h-3.5 text-amber-500 shrink-0" /> Aggregate Vault Balances
+                    <Sparkles className="w-3.5 h-3.5 text-amber-500 shrink-0" /> Member Savings Overview
                   </h3>
                   <div className="space-y-4 divide-y divide-neutral-100">
                     <div className="pt-0">
@@ -383,7 +382,7 @@ export default function ReportsModule({ currentUser, token, settings }: ReportsM
                       </div>
                     </div>
                     <div className="pt-3">
-                      <div className="text-[10px] uppercase text-neutral-400 font-semibold">Total Paid Share Capital Equity (3010)</div>
+                      <div className="text-[10px] uppercase text-neutral-400 font-semibold">Total Membership Investment (3010)</div>
                       <div className="text-[20px] font-semibold text-neutral-900 font-sans tracking-tight pt-1">
                         {settings.currencySymbol}{(totalEquityAgg / 100).toLocaleString('en-US', { minimumFractionDigits: 2 })}
                       </div>
@@ -517,19 +516,23 @@ export default function ReportsModule({ currentUser, token, settings }: ReportsM
             </div>
           )}
 
-          {/* Active TAB 3: SECURITY TRACES (AUDIT LOGS) */}
+          {/* Active TAB 3: ACTIVITY LOG (AUDIT LOGS) */}
           {activeSubTab === 'audit' && (
             <div className="space-y-4">
+              <div>
+                <h2 className="text-sm font-semibold text-neutral-800 font-sans">Activity Log</h2>
+                <p className="text-[11px] text-neutral-400 mt-1 leading-relaxed">A record of all important actions taken in the system.</p>
+              </div>
               <div className="bg-white border border-neutral-200/80 rounded-xl shadow-xl shadow-neutral-200/25 overflow-hidden">
                 <div className="p-4 border-b border-neutral-150 bg-neutral-50/50 flex justify-between items-center text-xs">
-                  <span className="text-[10px] uppercase font-bold text-neutral-400">Security Intrusion Trace logs</span>
+                  <span className="text-[10px] uppercase font-bold text-neutral-400">Activity Log</span>
                   <div className="text-[10px] text-neutral-400 font-medium">Chronological activities logs</div>
                 </div>
                 {auditLogsList.length === 0 ? (
                   <div className="py-24 text-center max-w-sm mx-auto flex flex-col items-center gap-2">
                     <History className="w-10 h-10 text-neutral-300" />
-                    <h3 className="text-xs font-semibold text-neutral-800">Clear Intrusion Record</h3>
-                    <p className="text-[11px] text-neutral-400">No admin-level actions or reversals have occurred yet.</p>
+                    <h3 className="text-xs font-semibold text-neutral-800">No Activity Yet</h3>
+                    <p className="text-[11px] text-neutral-400">No important actions have been recorded yet.</p>
                   </div>
                 ) : (
                   <div className="divide-y divide-neutral-150">
